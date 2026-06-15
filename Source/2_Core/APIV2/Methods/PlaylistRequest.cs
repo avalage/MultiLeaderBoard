@@ -1,0 +1,19 @@
+﻿using System.Net.Http;
+using BeatLeader.Models;
+using BeatLeader.Utils;
+using BeatLeader.WebRequests;
+
+namespace BeatLeader.APIV2 {
+    internal class PlaylistRequest : PersistentWebRequestBase<byte[], RawResponseParser> {
+        // /playlist/{playlistId}
+        private static string Endpoint => BLConstants.BEATLEADER_API_URL + "/playlist/{0}";
+        private static readonly WebRequestParams RequestParams = new() {
+            ResponseCompletionOption = HttpCompletionOption.ResponseContentRead
+        };
+
+        public static IWebRequest<byte[]> Send(string playlistId) {
+            var url = string.Format(Endpoint, playlistId);
+            return SendRet(url, HttpMethod.Get, requestParams: RequestParams);
+        }
+    }
+}
