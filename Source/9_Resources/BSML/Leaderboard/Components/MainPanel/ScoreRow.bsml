@@ -1,0 +1,11 @@
+<horizontal pref-width="80" pref-height="5.2">
+    <horizontal ignore-layout="true">
+        <image id="Background" src="#TransparentPixel" pref-width="80" pref-height="5.2"/>
+    </horizontal>
+
+    <horizontal id="CellsContainer" ignore-layout="true" spacing="1.3" pref-height="5.2" horizontal-fit="PreferredSize"/>
+
+    <horizontal ignore-layout="true">
+        <clickable-image id="Underline" src="#TransparentPixel" pref-width="80" pref-height="5.2" on-click="OnClick"/>
+    </horizontal>
+</horizontal>

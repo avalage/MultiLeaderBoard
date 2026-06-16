@@ -1,0 +1,8 @@
+<vertical pref-width="8" min-width="8" pref-height="6">
+    <horizontal id="background" ignore-layout="true" pref-width="8" pref-height="6" pad-left="0" pad-right="0" bg="round-rect-panel" bg-color="#FFFFFFDD">
+        <text id="mode-text" align="Center" pref-width="8" />
+    </horizontal>
+    <horizontal ignore-layout="true">
+        <clickable-image id="click-target" src="#TransparentPixel" preserve-aspect="false" pref-width="8" pref-height="6" on-click="mode-button-on-click"/>
+    </horizontal>
+</vertical>
