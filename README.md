@@ -1,7 +1,7 @@
 # Multileaderboard/ScoreLeader PC mod
 
 An open-source leaderboard for Beat Saber
-Now you can have BeatLeader and ScoreSaber combined in one UI!
+Now you can have BeatLeader, ScoreSaber and AccSaber Reloaded combined in one UI!
 You'll still need to have ScoreSaber mod to upload your scores
 
 ![cover](./Media/cover.png)
