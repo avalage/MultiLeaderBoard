@@ -82,7 +82,11 @@ namespace BeatLeader {
         public ScoreRowCellType LeaderboardTableMask = ConfigDefaults.LeaderboardTableMask;
         public int ScoresContext = ConfigDefaults.ScoresContext;
         public bool DarkGoldThemeEnabled = ConfigDefaults.DarkGoldThemeEnabled;
+        public float LeaderboardOtherScoreBackgroundOpacity = ConfigDefaults.LeaderboardOtherScoreBackgroundOpacity;
         public bool ExperienceBarEnabled = true;
+        public bool ScoreSubmissionsEnabled = ConfigDefaults.ScoreSubmissionsEnabled;
+        public bool BeatLeaderScoreSubmissionEnabled = ConfigDefaults.BeatLeaderScoreSubmissionEnabled;
+        public bool ScoreSaberScoreSubmissionEnabled = ConfigDefaults.ScoreSaberScoreSubmissionEnabled;
 
         // Hub
         public BeatLeaderHubTheme HubTheme = ConfigDefaults.HubTheme;

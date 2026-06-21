@@ -35,6 +35,7 @@ namespace BeatLeader.Components {
 
             ScoresRequest.StateChangedEvent += OnScoresRequestStateChanged;
             ClanScoresRequest.StateChangedEvent += OnScoresRequestStateChanged;
+            UploadReplayRequest.StateChangedEvent += OnUploadRequestStateChanged;
             LeaderboardsCache.CacheWasChangedEvent += OnLeaderboardsCacheChanged;
 
             LeaderboardState.IsVisibleChangedEvent += OnLeaderboardVisibleChanged;
@@ -50,9 +51,11 @@ namespace BeatLeader.Components {
         protected override void OnDispose() {
             base.OnDispose();
             CancelPerformancePointRequests();
+            CancelFreshUploadAccSaberRefresh();
 
             ScoresRequest.StateChangedEvent -= OnScoresRequestStateChanged;
             ClanScoresRequest.StateChangedEvent -= OnScoresRequestStateChanged;
+            UploadReplayRequest.StateChangedEvent -= OnUploadRequestStateChanged;
             LeaderboardsCache.CacheWasChangedEvent -= OnLeaderboardsCacheChanged;
 
             LeaderboardState.IsVisibleChangedEvent -= OnLeaderboardVisibleChanged;
@@ -152,7 +155,15 @@ namespace BeatLeader.Components {
         }
 
         private void OnLeaderboardVisibleChanged(bool isVisible) {
-            if (isVisible) return;
+            if (isVisible) {
+                if (_content != null) {
+                    RequestScoreSaberPp(_content);
+                    RequestAccSaberAp(_content);
+                }
+
+                return;
+            }
+
             StartAnimation();
         }
 
@@ -271,6 +282,10 @@ namespace BeatLeader.Components {
             CancelScoreSaberPpRequest();
 
             if (!BeatLeaderDarkGoldTheme.Enabled || content == null || !CellTypeMask.HasFlag(ScoreRowCellType.PerformancePoints)) {
+                return;
+            }
+
+            if (!isActiveAndEnabled || !gameObject.activeInHierarchy) {
                 return;
             }
 
@@ -493,9 +508,19 @@ namespace BeatLeader.Components {
         #region AccSaber AP
 
         private const float AccSaberRequestDebounceSeconds = 0.24f;
+        private const float AccSaberFreshUploadCacheBypassSeconds = 45.0f;
+        private const float AccSaberFreshUploadRetryDelaySeconds = 7.0f;
+        private const int AccSaberFreshUploadRetryCount = 5;
         private Coroutine? _accSaberApCoroutine;
         private int _accSaberApRequestId;
         private readonly List<UnityWebRequest> _activeAccSaberScoreRequests = new();
+        private LeaderboardKey _lastUploadLeaderboardKey;
+        private LeaderboardKey _freshUploadAccSaberLeaderboardKey;
+        private string? _freshUploadAccSaberPlayerId;
+        private float _freshUploadAccSaberExpiresAt;
+        private Coroutine? _freshUploadAccSaberRefreshCoroutine;
+        private int _freshUploadAccSaberRefreshRequestId;
+        private UnityWebRequest? _activeFreshUploadAccSaberRequest;
 
         private static void ClearAccSaberAp(ScoresTableContent content) {
             foreach (var score in EnumerateScoreRows(content)) {
@@ -508,6 +533,10 @@ namespace BeatLeader.Components {
             CancelAccSaberApRequest();
 
             if (!BeatLeaderDarkGoldTheme.Enabled || content == null || !CellTypeMask.HasFlag(ScoreRowCellType.PerformancePoints)) {
+                return;
+            }
+
+            if (!isActiveAndEnabled || !gameObject.activeInHierarchy) {
                 return;
             }
 
@@ -526,7 +555,8 @@ namespace BeatLeader.Components {
             var pendingRows = new List<Score>(rows.Length);
             var updatedFromCache = false;
             foreach (var row in rows) {
-                if (AccSaberApiProvider.TryGetCachedScore(leaderboardKey, row.originalPlayer.id, out var cachedInfo)) {
+                var playerId = row.originalPlayer.id;
+                if (AccSaberApiProvider.TryGetCachedScore(leaderboardKey, playerId, out var cachedInfo)) {
                     if (ApplyAccSaberAp(row, cachedInfo)) {
                         updatedFromCache = true;
                     }
@@ -565,10 +595,11 @@ namespace BeatLeader.Components {
             }
 
             var requests = new List<AccSaberScoreRequest>(rows.Length);
+            var updated = false;
             foreach (var row in rows) {
                 var playerId = row.originalPlayer.id;
                 if (AccSaberApiProvider.TryGetCachedScore(leaderboardKey, playerId, out var cachedInfo)) {
-                    ApplyAccSaberAp(row, cachedInfo);
+                    updated |= ApplyAccSaberAp(row, cachedInfo);
                     continue;
                 }
 
@@ -588,7 +619,6 @@ namespace BeatLeader.Components {
                 yield return null;
             }
 
-            var updated = false;
             foreach (var item in requests) {
                 var request = item.Request;
                 ClearActiveAccSaberScoreRequest(request);
@@ -637,6 +667,168 @@ namespace BeatLeader.Components {
             row.accSaberAp = info.Ap;
             row.withAccSaberAp = true;
             return true;
+        }
+
+        private void OnUploadRequestStateChanged(WebRequests.IWebRequest<ScoreUploadResponse> instance, WebRequests.RequestState state, string? failReason) {
+            switch (state) {
+                case WebRequests.RequestState.Started:
+                    _lastUploadLeaderboardKey = LeaderboardState.SelectedLeaderboardKey;
+                    break;
+                case WebRequests.RequestState.Finished:
+                    RegisterFreshUploadAccSaberScore(instance.Result);
+                    break;
+            }
+        }
+
+        private void RegisterFreshUploadAccSaberScore(ScoreUploadResponse? response) {
+            if (response?.Score?.originalPlayer == null || response.Status == ScoreUploadStatus.Error) {
+                return;
+            }
+
+            var playerId = response.Score.originalPlayer.id;
+            if (string.IsNullOrEmpty(playerId) || !AccSaberApiProvider.CanRequestScore(_lastUploadLeaderboardKey)) {
+                return;
+            }
+
+            _freshUploadAccSaberLeaderboardKey = _lastUploadLeaderboardKey;
+            _freshUploadAccSaberPlayerId = playerId;
+            _freshUploadAccSaberExpiresAt = Time.realtimeSinceStartup + AccSaberFreshUploadCacheBypassSeconds;
+            AccSaberApiProvider.ClearScoreCache(_lastUploadLeaderboardKey, playerId);
+
+            ScheduleFreshUploadAccSaberRefresh(_lastUploadLeaderboardKey, playerId);
+        }
+
+        private bool IsFreshUploadAccSaberScore(LeaderboardKey leaderboardKey, string playerId) {
+            return !string.IsNullOrEmpty(_freshUploadAccSaberPlayerId) &&
+                string.Equals(_freshUploadAccSaberPlayerId, playerId, StringComparison.OrdinalIgnoreCase) &&
+                _freshUploadAccSaberLeaderboardKey.Equals(leaderboardKey) &&
+                Time.realtimeSinceStartup <= _freshUploadAccSaberExpiresAt;
+        }
+
+        private void ScheduleFreshUploadAccSaberRefresh(LeaderboardKey leaderboardKey, string playerId) {
+            CancelFreshUploadAccSaberRefresh();
+            if (!isActiveAndEnabled || !gameObject.activeInHierarchy) {
+                return;
+            }
+
+            _freshUploadAccSaberRefreshCoroutine = StartCoroutine(FreshUploadAccSaberRefreshCoroutine(
+                ++_freshUploadAccSaberRefreshRequestId,
+                leaderboardKey,
+                playerId
+            ));
+        }
+
+        private IEnumerator FreshUploadAccSaberRefreshCoroutine(int requestId, LeaderboardKey leaderboardKey, string playerId) {
+            for (var attempt = 0; attempt < AccSaberFreshUploadRetryCount; attempt++) {
+                if (attempt > 0) {
+                    yield return new WaitForSecondsRealtime(AccSaberFreshUploadRetryDelaySeconds);
+                }
+
+                if (requestId != _freshUploadAccSaberRefreshRequestId || !IsFreshUploadAccSaberScore(leaderboardKey, playerId)) {
+                    yield break;
+                }
+
+                if (!TryGetCurrentScoreRow(playerId, out var score)) {
+                    continue;
+                }
+
+                if (score.withAccSaberAp) {
+                    break;
+                }
+
+                if (!leaderboardKey.Equals(LeaderboardState.SelectedLeaderboardKey) || _content == null) {
+                    continue;
+                }
+
+                yield return LoadFreshUploadAccSaberScoreCoroutine(requestId, leaderboardKey, score);
+            }
+
+            _freshUploadAccSaberRefreshCoroutine = null;
+        }
+
+        private IEnumerator LoadFreshUploadAccSaberScoreCoroutine(int requestId, LeaderboardKey leaderboardKey, Score score) {
+            var playerId = score.originalPlayer?.id;
+            if (string.IsNullOrEmpty(playerId) || !IsFreshUploadAccSaberScore(leaderboardKey, playerId)) {
+                yield break;
+            }
+
+            AccSaberApiProvider.ClearScoreCache(leaderboardKey, playerId);
+
+            using var request = UnityWebRequest.Get(AccSaberApiProvider.BuildScoreUrl(leaderboardKey, playerId));
+            _activeFreshUploadAccSaberRequest = request;
+            request.timeout = AccSaberApiProvider.TimeoutSeconds;
+            request.SetRequestHeader("User-Agent", Plugin.UserAgent);
+            yield return request.SendWebRequest();
+            ClearActiveFreshUploadAccSaberRequest(request);
+
+            if (requestId != _freshUploadAccSaberRefreshRequestId ||
+                !leaderboardKey.Equals(LeaderboardState.SelectedLeaderboardKey) ||
+                !IsFreshUploadAccSaberScore(leaderboardKey, playerId)) {
+                yield break;
+            }
+
+            if (request.isNetworkError || request.isHttpError) {
+                Plugin.Log.Debug($"[AccSaberAP] Fresh uploaded score refresh failed for {playerId}: {request.responseCode} {request.error}");
+                yield break;
+            }
+
+            if (!AccSaberApiProvider.TryReadScore(request.downloadHandler.text, out var info)) {
+                Plugin.Log.Debug($"[AccSaberAP] Fresh uploaded score for {playerId} returned no AP yet.");
+                yield break;
+            }
+
+            AccSaberApiProvider.SaveScoreToCache(leaderboardKey, playerId, info);
+            if (!ApplyAccSaberAp(score, info)) {
+                yield break;
+            }
+
+            LeaderboardEvents.NotifyScorePerformancePointsUpdated(score);
+            RefreshCells();
+            UpdateLayout();
+        }
+
+        private bool TryGetCurrentScoreRow(string playerId, out Score score) {
+            score = null!;
+            if (_content == null) {
+                return false;
+            }
+
+            foreach (var row in EnumerateScoreRows(_content)) {
+                if (string.Equals(row.originalPlayer?.id, playerId, StringComparison.OrdinalIgnoreCase)) {
+                    score = row;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void CancelFreshUploadAccSaberRefresh() {
+            _freshUploadAccSaberRefreshRequestId++;
+            if (_freshUploadAccSaberRefreshCoroutine == null) {
+                DisposeActiveFreshUploadAccSaberRequest();
+                return;
+            }
+
+            StopCoroutine(_freshUploadAccSaberRefreshCoroutine);
+            _freshUploadAccSaberRefreshCoroutine = null;
+            DisposeActiveFreshUploadAccSaberRequest();
+        }
+
+        private void DisposeActiveFreshUploadAccSaberRequest() {
+            if (_activeFreshUploadAccSaberRequest == null) {
+                return;
+            }
+
+            _activeFreshUploadAccSaberRequest.Abort();
+            _activeFreshUploadAccSaberRequest.Dispose();
+            _activeFreshUploadAccSaberRequest = null;
+        }
+
+        private void ClearActiveFreshUploadAccSaberRequest(UnityWebRequest request) {
+            if (ReferenceEquals(_activeFreshUploadAccSaberRequest, request)) {
+                _activeFreshUploadAccSaberRequest = null;
+            }
         }
 
         private static void NotifyPerformancePointsUpdated(IEnumerable<Score> rows) {

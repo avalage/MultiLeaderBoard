@@ -7,8 +7,10 @@ using BeatLeader.APIV2;
 using BeatLeader.DataManager;
 using BeatLeader.Manager;
 using BeatLeader.Models;
+using BeatLeader.Models.Replay;
 using BeatLeader.UI;
 using BeatLeader.UI.Hub;
+using BeatLeader.Utils;
 using BeatSaberMarkupLanguage.Attributes;
 using BeatSaberMarkupLanguage.Components;
 using HMUI;
@@ -33,13 +35,25 @@ namespace BeatLeader.Components {
         private static readonly TimeSpan ScoreSaberProfileCacheTtl = TimeSpan.FromMinutes(10);
         private static readonly Dictionary<string, ScoreSaberProfileCacheEntry> ScoreSaberProfileCache = new();
         private Coroutine? _scoreSaberProfileCoroutine;
+        private MonoBehaviour? _scoreSaberProfileCoroutineRunner;
         private int _scoreSaberProfileRequestId;
         private UnityWebRequest? _activeScoreSaberProfileRequest;
         private string? _scoreSaberStatsPlayerId;
         private Coroutine? _accSaberProfileCoroutine;
+        private MonoBehaviour? _accSaberProfileCoroutineRunner;
         private int _accSaberProfileRequestId;
         private UnityWebRequest? _activeAccSaberProfileRequest;
         private string? _accSaberStatsPlayerId;
+        private const float ExternalProfileRefreshRetryDelaySeconds = 7.0f;
+        private const int ExternalProfileRefreshRetryCount = 5;
+        private const float ProfileLoadingTimeoutSeconds = 12.0f;
+        private Coroutine? _externalProfileRefreshCoroutine;
+        private MonoBehaviour? _externalProfileRefreshCoroutineRunner;
+        private int _externalProfileRefreshRequestId;
+        private Coroutine? _profileLoadingTimeoutCoroutine;
+        private MonoBehaviour? _profileLoadingTimeoutCoroutineRunner;
+        private int _profileLoadingTimeoutRequestId;
+        private static CoroutineRunner? _coroutineRunner;
 
         private void Awake() {
             _avatar = Instantiate<PlayerAvatar>(transform);
@@ -55,6 +69,8 @@ namespace BeatLeader.Components {
             InitializeExperienceBar();
 
             UserRequest.StateChangedEvent += OnProfileRequestStateChanged;
+            ScoreUtil.ReplayProcessedEvent += OnReplayProcessed;
+            ScoreUtil.ReplayUploadStartedEvent += OnReplayUploadStarted;
             UploadReplayRequest.StateChangedEvent += OnUploadRequestStateChanged;
             PrestigePanel.PrestigeWasPressedEvent += IncrementPrestigeIcon;
             GlobalSettingsView.ExperienceBarConfigEvent += OnExperienceBarConfigChanged;
@@ -63,10 +79,14 @@ namespace BeatLeader.Components {
         }
 
         protected override void OnDispose() {
+            CancelProfileLoadingTimeout();
+            CancelExternalProfileRefresh();
             CancelScoreSaberProfileRequest();
             CancelAccSaberProfileRequest();
 
             UserRequest.StateChangedEvent -= OnProfileRequestStateChanged;
+            ScoreUtil.ReplayProcessedEvent -= OnReplayProcessed;
+            ScoreUtil.ReplayUploadStartedEvent -= OnReplayUploadStarted;
             UploadReplayRequest.StateChangedEvent -= OnUploadRequestStateChanged;
             PrestigePanel.PrestigeWasPressedEvent -= IncrementPrestigeIcon;
             GlobalSettingsView.ExperienceBarConfigEvent -= OnExperienceBarConfigChanged;
@@ -78,17 +98,45 @@ namespace BeatLeader.Components {
 
         #region Events
 
-        private void OnUploadRequestStateChanged(WebRequests.IWebRequest<ScoreUploadResponse> instance, WebRequests.RequestState state, string? failReason) {
-            if (state is not WebRequests.RequestState.Finished || instance.Result?.Score?.Player == null) return;
+        private void OnReplayProcessed(Replay replay, PlayEndData data) {
+            ScheduleExternalProfileRefreshFromCurrentPlayer("Replay processed");
+        }
 
-            var updatedPlayer = instance.Result.Score.Player;
-            if (instance.Result.Status != ScoreUploadStatus.Error) {
+        private void OnReplayUploadStarted(Replay replay, PlayEndData data) {
+            ScheduleExternalProfileRefreshFromCurrentPlayer("Replay upload started");
+        }
+
+        private void ScheduleExternalProfileRefreshFromCurrentPlayer(string reason) {
+            var currentPlayer = ResolveExternalProfilePlayer(null);
+            if (currentPlayer == null) {
+                Plugin.Log.Debug($"[ExternalProfileRefresh] {reason}, but current player is not available.");
+                return;
+            }
+
+            Plugin.Log.Debug($"[ExternalProfileRefresh] {reason}; scheduling external profile refresh for {currentPlayer.id}.");
+            ScheduleExternalProfileRefreshRetry(currentPlayer.id);
+        }
+
+        private void OnUploadRequestStateChanged(WebRequests.IWebRequest<ScoreUploadResponse> instance, WebRequests.RequestState state, string? failReason) {
+            if (state is not WebRequests.RequestState.Finished) return;
+
+            var updatedPlayer = instance.Result?.Score?.Player ?? ResolveExternalProfilePlayer(null);
+            if (updatedPlayer == null) {
+                return;
+            }
+
+            if (instance.Result?.Status != ScoreUploadStatus.Error) {
                 UpdateExperienceBar(updatedPlayer);
             }
 
-            if (instance.Result.Status != ScoreUploadStatus.Uploaded) return;
-            OnProfileUpdated(updatedPlayer);
-            player.contextExtensions = updatedPlayer.contextExtensions;
+            if (instance.Result?.Status == ScoreUploadStatus.Uploaded && instance.Result.Score?.Player != null) {
+                OnProfileUpdated(updatedPlayer);
+                player.contextExtensions = updatedPlayer.contextExtensions;
+            }
+
+            if (instance.Result?.Status != ScoreUploadStatus.Error) {
+                RefreshExternalProfilesAfterLevel(updatedPlayer);
+            }
         }
 
         private void OnProfileRequestStateChanged(WebRequests.IWebRequest<Player> instance, WebRequests.RequestState state, string? failReason) {
@@ -103,6 +151,7 @@ namespace BeatLeader.Components {
                     OnProfileRequestStarted();
                     break;
                 case WebRequests.RequestState.Finished:
+                    CancelProfileLoadingTimeout();
                     player = instance.Result;
                     OnProfileUpdated(player);
                     break;
@@ -111,21 +160,35 @@ namespace BeatLeader.Components {
         }
 
         private void OnProfileRequestFailed(string reason) {
+            CancelProfileLoadingTimeout();
+            if (ProfileManager.HasProfile && ProfileManager.Profile != null) {
+                OnProfileUpdated(ProfileManager.Profile);
+                return;
+            }
+
             NameText = reason;
             StatsActive = false;
             ScoreSaberStatsActive = false;
             AccSaberStatsActive = false;
             ExperienceBarActive = false;
+            CancelExternalProfileRefresh();
             CancelScoreSaberProfileRequest();
             CancelAccSaberProfileRequest();
         }
 
         private void OnProfileRequestStarted() {
-            NameText = "Loading...";
-            StatsActive = false;
-            ExperienceBarActive = false;
+            CancelProfileLoadingTimeout();
             CancelScoreSaberProfileRequest();
             CancelAccSaberProfileRequest();
+
+            if (ProfileManager.HasProfile && ProfileManager.Profile != null) {
+                OnProfileUpdated(ProfileManager.Profile);
+            } else {
+                NameText = "Loading...";
+                StatsActive = false;
+                ExperienceBarActive = false;
+                ScheduleProfileLoadingTimeout();
+            }
         }
 
         private void OnProfileUpdated(Player player) {
@@ -143,6 +206,122 @@ namespace BeatLeader.Components {
             UpdateExperienceBar(player);
             RequestScoreSaberProfile(player);
             RequestAccSaberProfile(player);
+        }
+
+        private void RefreshExternalProfilesAfterLevel(Player updatedPlayer) {
+            if (!BeatLeaderDarkGoldTheme.Enabled || updatedPlayer == null || string.IsNullOrEmpty(updatedPlayer.id) || updatedPlayer.id == "0") {
+                return;
+            }
+
+            RequestScoreSaberProfile(updatedPlayer, false);
+            RequestAccSaberProfile(updatedPlayer, false);
+            ScheduleExternalProfileRefreshRetry(updatedPlayer.id);
+        }
+
+        private void ScheduleExternalProfileRefreshRetry(string playerId) {
+            CancelExternalProfileRefresh();
+            _externalProfileRefreshCoroutine = StartManagedCoroutine(
+                ExternalProfileRefreshRetryCoroutine(++_externalProfileRefreshRequestId, playerId),
+                ref _externalProfileRefreshCoroutineRunner
+            );
+        }
+
+        private IEnumerator ExternalProfileRefreshRetryCoroutine(int requestId, string playerId) {
+            for (var attempt = 0; attempt < ExternalProfileRefreshRetryCount; attempt++) {
+                yield return new WaitForSecondsRealtime(ExternalProfileRefreshRetryDelaySeconds);
+
+                var refreshPlayer = ResolveExternalProfilePlayer(playerId);
+                if (requestId != _externalProfileRefreshRequestId || refreshPlayer == null) {
+                    yield break;
+                }
+
+                RequestScoreSaberProfile(refreshPlayer, false);
+                RequestAccSaberProfile(refreshPlayer, false);
+            }
+
+            _externalProfileRefreshCoroutine = null;
+            _externalProfileRefreshCoroutineRunner = null;
+        }
+
+        private Player? ResolveExternalProfilePlayer(string? playerId) {
+            if (player != null && (string.IsNullOrEmpty(playerId) || string.Equals(player.id, playerId, StringComparison.Ordinal))) {
+                return player;
+            }
+
+            if (ProfileManager.HasProfile &&
+                ProfileManager.Profile != null &&
+                (string.IsNullOrEmpty(playerId) || string.Equals(ProfileManager.Profile.id, playerId, StringComparison.Ordinal))) {
+                return ProfileManager.Profile;
+            }
+
+            return null;
+        }
+
+        private void CancelExternalProfileRefresh() {
+            _externalProfileRefreshRequestId++;
+            StopManagedCoroutine(ref _externalProfileRefreshCoroutine, ref _externalProfileRefreshCoroutineRunner);
+        }
+
+        private void ScheduleProfileLoadingTimeout() {
+            _profileLoadingTimeoutCoroutine = StartManagedCoroutine(
+                ProfileLoadingTimeoutCoroutine(++_profileLoadingTimeoutRequestId),
+                ref _profileLoadingTimeoutCoroutineRunner
+            );
+        }
+
+        private IEnumerator ProfileLoadingTimeoutCoroutine(int requestId) {
+            yield return new WaitForSecondsRealtime(ProfileLoadingTimeoutSeconds);
+
+            if (requestId != _profileLoadingTimeoutRequestId) {
+                yield break;
+            }
+
+            _profileLoadingTimeoutCoroutine = null;
+            _profileLoadingTimeoutCoroutineRunner = null;
+
+            if (ProfileManager.HasProfile && ProfileManager.Profile != null) {
+                OnProfileUpdated(ProfileManager.Profile);
+                yield break;
+            }
+
+            NameText = "BeatLeader unavailable";
+            StatsActive = false;
+            ScoreSaberStatsActive = false;
+            AccSaberStatsActive = false;
+            ExperienceBarActive = false;
+        }
+
+        private void CancelProfileLoadingTimeout() {
+            _profileLoadingTimeoutRequestId++;
+            StopManagedCoroutine(ref _profileLoadingTimeoutCoroutine, ref _profileLoadingTimeoutCoroutineRunner);
+        }
+
+        private static Coroutine StartManagedCoroutine(IEnumerator coroutine, ref MonoBehaviour? runner) {
+            runner = GetCoroutineRunner();
+            return runner.StartCoroutine(coroutine);
+        }
+
+        private static void StopManagedCoroutine(ref Coroutine? coroutine, ref MonoBehaviour? runner) {
+            if (coroutine != null && runner != null) {
+                runner.StopCoroutine(coroutine);
+            }
+
+            coroutine = null;
+            runner = null;
+        }
+
+        private static MonoBehaviour GetCoroutineRunner() {
+            if (_coroutineRunner != null) {
+                return _coroutineRunner;
+            }
+
+            var gameObject = new GameObject("BeatLeaderExternalProfileRefreshRunner");
+            UnityEngine.Object.DontDestroyOnLoad(gameObject);
+            _coroutineRunner = gameObject.AddComponent<CoroutineRunner>();
+            return _coroutineRunner;
+        }
+
+        private sealed class CoroutineRunner : MonoBehaviour {
         }
 
         #endregion
@@ -336,7 +515,7 @@ namespace BeatLeader.Components {
 
         #region ScoreSaberProfile
 
-        private void RequestScoreSaberProfile(Player player) {
+        private void RequestScoreSaberProfile(Player player, bool useCache = true) {
             CancelScoreSaberProfileRequest();
 
             if (!BeatLeaderDarkGoldTheme.Enabled || player == null || string.IsNullOrEmpty(player.id) || player.id == "0") {
@@ -351,19 +530,23 @@ namespace BeatLeader.Components {
                 ScoreSaberStatsActive = false;
             }
 
-            if (TryGetCachedScoreSaberProfile(playerId, out var cachedProfile)) {
+            if (useCache && TryGetCachedScoreSaberProfile(playerId, out var cachedProfile)) {
                 ApplyScoreSaberProfile(playerId, cachedProfile);
             }
 
-            _scoreSaberProfileCoroutine = StartCoroutine(LoadScoreSaberProfileCoroutine(_scoreSaberProfileRequestId, playerId));
+            if (!useCache) {
+                ScoreSaberProfileCache.Remove(playerId);
+            }
+
+            _scoreSaberProfileCoroutine = StartManagedCoroutine(
+                LoadScoreSaberProfileCoroutine(_scoreSaberProfileRequestId, playerId, !useCache),
+                ref _scoreSaberProfileCoroutineRunner
+            );
         }
 
         private void CancelScoreSaberProfileRequest() {
             _scoreSaberProfileRequestId++;
-            if (_scoreSaberProfileCoroutine != null) {
-                StopCoroutine(_scoreSaberProfileCoroutine);
-                _scoreSaberProfileCoroutine = null;
-            }
+            StopManagedCoroutine(ref _scoreSaberProfileCoroutine, ref _scoreSaberProfileCoroutineRunner);
 
             if (_activeScoreSaberProfileRequest != null) {
                 _activeScoreSaberProfileRequest.Abort();
@@ -372,11 +555,19 @@ namespace BeatLeader.Components {
             }
         }
 
-        private IEnumerator LoadScoreSaberProfileCoroutine(int requestId, string playerId) {
+        private IEnumerator LoadScoreSaberProfileCoroutine(int requestId, string playerId, bool bypassCache) {
             var url = $"{ScoreSaberPlayerApiBaseUrl}/{UnityWebRequest.EscapeURL(playerId)}/full";
+            if (bypassCache) {
+                url += $"?_={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+            }
+
             using var request = UnityWebRequest.Get(url);
             _activeScoreSaberProfileRequest = request;
             request.timeout = 4;
+            if (bypassCache) {
+                request.SetRequestHeader("Cache-Control", "no-cache");
+                request.SetRequestHeader("Pragma", "no-cache");
+            }
             request.SetRequestHeader("User-Agent", Plugin.UserAgent);
             yield return request.SendWebRequest();
             ClearActiveScoreSaberProfileRequest(request);
@@ -386,6 +577,7 @@ namespace BeatLeader.Components {
             }
 
             _scoreSaberProfileCoroutine = null;
+            _scoreSaberProfileCoroutineRunner = null;
             if (request.isNetworkError || request.isHttpError) {
                 Plugin.Log.Debug($"[ScoreSaberProfile] Failed to load profile for {playerId}: {request.responseCode} {request.error}");
                 yield break;
@@ -399,6 +591,7 @@ namespace BeatLeader.Components {
                 profile,
                 DateTime.UtcNow.Add(ScoreSaberProfileCacheTtl)
             );
+            Plugin.Log.Debug($"[ScoreSaberProfile] Loaded profile for {playerId}: pp={profile.Pp}, rank={profile.Rank}, countryRank={profile.CountryRank}");
             ApplyScoreSaberProfile(playerId, profile);
         }
 
@@ -517,7 +710,7 @@ namespace BeatLeader.Components {
 
         #region AccSaberProfile
 
-        private void RequestAccSaberProfile(Player player) {
+        private void RequestAccSaberProfile(Player player, bool useCache = true) {
             CancelAccSaberProfileRequest();
 
             if (!BeatLeaderDarkGoldTheme.Enabled || player == null || string.IsNullOrEmpty(player.id) || player.id == "0") {
@@ -532,19 +725,23 @@ namespace BeatLeader.Components {
                 AccSaberStatsActive = false;
             }
 
-            if (AccSaberApiProvider.TryGetCachedProfile(playerId, out var cachedProfile)) {
+            if (useCache && AccSaberApiProvider.TryGetCachedProfile(playerId, out var cachedProfile)) {
                 ApplyAccSaberProfile(playerId, cachedProfile);
             }
 
-            _accSaberProfileCoroutine = StartCoroutine(LoadAccSaberProfileCoroutine(_accSaberProfileRequestId, playerId));
+            if (!useCache) {
+                AccSaberApiProvider.ClearProfileCache(playerId);
+            }
+
+            _accSaberProfileCoroutine = StartManagedCoroutine(
+                LoadAccSaberProfileCoroutine(_accSaberProfileRequestId, playerId, !useCache),
+                ref _accSaberProfileCoroutineRunner
+            );
         }
 
         private void CancelAccSaberProfileRequest() {
             _accSaberProfileRequestId++;
-            if (_accSaberProfileCoroutine != null) {
-                StopCoroutine(_accSaberProfileCoroutine);
-                _accSaberProfileCoroutine = null;
-            }
+            StopManagedCoroutine(ref _accSaberProfileCoroutine, ref _accSaberProfileCoroutineRunner);
 
             if (_activeAccSaberProfileRequest != null) {
                 _activeAccSaberProfileRequest.Abort();
@@ -553,10 +750,14 @@ namespace BeatLeader.Components {
             }
         }
 
-        private IEnumerator LoadAccSaberProfileCoroutine(int requestId, string playerId) {
-            using var request = UnityWebRequest.Get(AccSaberApiProvider.BuildProfileUrl(playerId));
+        private IEnumerator LoadAccSaberProfileCoroutine(int requestId, string playerId, bool bypassCache) {
+            using var request = UnityWebRequest.Get(AccSaberApiProvider.BuildProfileUrl(playerId, bypassCache));
             _activeAccSaberProfileRequest = request;
             request.timeout = AccSaberApiProvider.TimeoutSeconds;
+            if (bypassCache) {
+                request.SetRequestHeader("Cache-Control", "no-cache");
+                request.SetRequestHeader("Pragma", "no-cache");
+            }
             request.SetRequestHeader("User-Agent", Plugin.UserAgent);
             yield return request.SendWebRequest();
             ClearActiveAccSaberProfileRequest(request);
@@ -566,16 +767,19 @@ namespace BeatLeader.Components {
             }
 
             _accSaberProfileCoroutine = null;
+            _accSaberProfileCoroutineRunner = null;
             if (request.isNetworkError || request.isHttpError) {
                 Plugin.Log.Debug($"[AccSaberProfile] Failed to load profile for {playerId}: {request.responseCode} {request.error}");
                 yield break;
             }
 
             if (!AccSaberApiProvider.TryReadProfile(request.downloadHandler.text, out var profile)) {
+                Plugin.Log.Debug($"[AccSaberProfile] Could not parse profile for {playerId}");
                 yield break;
             }
 
             AccSaberApiProvider.SaveProfileToCache(playerId, profile);
+            Plugin.Log.Debug($"[AccSaberProfile] Loaded profile for {playerId}: ap={profile.Ap}, rank={profile.Rank}, countryRank={profile.CountryRank}");
             ApplyAccSaberProfile(playerId, profile);
         }
 

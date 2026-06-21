@@ -19,13 +19,14 @@ namespace BeatLeader.Utils {
         }
 
         private static bool ShouldSubmit() {
-            return Submission && SiraSubmission && BS_UtilsSubmission;
+            return Submission && SiraSubmission && BS_UtilsSubmission && ScoreSubmissionManager.BeatLeaderUploadEnabled;
         }
 
         #endregion
 
         #region ProcessReplay
 
+        public static Action<Replay, PlayEndData>? ReplayProcessedEvent;
         public static Action<Replay, PlayEndData>? ReplayUploadStartedEvent;
 
         public static void ProcessReplay(Replay replay, PlayEndData data) {
@@ -33,8 +34,10 @@ namespace BeatLeader.Utils {
                 data = new PlayEndData(LevelEndType.Practice, data.Time);
             }
 
+            ReplayProcessedEvent?.Invoke(replay, data);
+
             if (!ShouldSubmit()) {
-                Plugin.Log.Debug("Score submission was disabled");
+                Plugin.Log.Debug($"BeatLeader score submission was disabled ({ScoreSubmissionManager.FormatStatus()})");
                 SaveReplay(replay, data);
                 return;
             }

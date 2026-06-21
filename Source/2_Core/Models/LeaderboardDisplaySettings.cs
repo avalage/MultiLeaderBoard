@@ -5,7 +5,8 @@ namespace BeatLeader.Models
         Both,
         ScoreSaberOnly,
         BeatLeaderOnly,
-        AccSaberOnly
+        AccSaberOnly,
+        All
     }
 
     public class LeaderboardDisplaySettings

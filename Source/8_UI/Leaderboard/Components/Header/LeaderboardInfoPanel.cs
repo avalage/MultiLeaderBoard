@@ -32,6 +32,10 @@ namespace BeatLeader.Components {
         private MapTypePanel _mapTypePanel2 = null!;
         private MapTypePanel _mapTypePanel3 = null!;
         private List<MapTypePanel>? _mapTypePanels = null;
+        private YogaModifier _rankedStarsPanelModifier = null!;
+        private const float RankedStarsPanelBothOffset = 8.0f;
+        private const float RankedStarsPanelSingleSourceOffset = 10.0f;
+        private const float RankedStarsPanelTripleAllClearance = 5.0f;
 
         private DownloadScoresModal _downloadModal = null!;
         private Label _replaysLabel = null!;
@@ -96,7 +100,7 @@ namespace BeatLeader.Components {
                                 var fitter = x.Content.AddComponent<ContentSizeFitter>();
                                 fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
                             }
-                        ),
+                        ).AsFlexItem(modifier: out _rankedStarsPanelModifier),
 
                         new Layout {
                             Children = {
@@ -518,6 +522,7 @@ namespace BeatLeader.Components {
 
         private void UpdateVisuals() {
             RefreshRankedStarsModeButton();
+            UpdateRankedStarsPanelClearance();
             _mapStatus.SetActive(_rankedStatus is not RankedStatus.Unknown || _scoreSaberLeaderboardInfo.IsKnown || _accSaberDifficultyInfo.IsKnown);
             _mapStatus.SetValues(
                 _rankedStatus,
@@ -535,6 +540,32 @@ namespace BeatLeader.Components {
             _approvalCheckbox.Enabled = qualificationActive;
 
             _menuButton.Enabled = EnvironmentManagerPatch.EnvironmentType is not MenuEnvironmentManager.MenuEnvironmentType.Lobby;
+        }
+
+        private void UpdateRankedStarsPanelClearance() {
+            if (_rankedStarsPanelModifier == null) {
+                return;
+            }
+
+            if (PluginConfig.RankedStarsDisplayMode is RankedStarsDisplayMode.All) {
+                var rankedSourcesCount = 0;
+                if (_scoreSaberLeaderboardInfo.IsRanked) rankedSourcesCount++;
+                if (_rankedStatus is RankedStatus.Ranked) rankedSourcesCount++;
+                if (_accSaberDifficultyInfo.IsKnown) rankedSourcesCount++;
+
+                _rankedStarsPanelModifier.Margin = rankedSourcesCount switch {
+                    3 => new() { right = RankedStarsPanelTripleAllClearance },
+                    2 => new() { left = RankedStarsPanelBothOffset, right = 0.0f },
+                    1 => new() { left = RankedStarsPanelSingleSourceOffset, right = 0.0f },
+                    _ => new() { left = RankedStarsPanelSingleSourceOffset, right = 0.0f }
+                };
+                return;
+            }
+
+            _rankedStarsPanelModifier.Margin =
+                PluginConfig.RankedStarsDisplayMode is RankedStarsDisplayMode.Both
+                    ? new() { left = RankedStarsPanelBothOffset, right = 0.0f }
+                    : new() { left = RankedStarsPanelSingleSourceOffset, right = 0.0f };
         }
 
         private void UpdateMapTypes() {
@@ -570,6 +601,7 @@ namespace BeatLeader.Components {
                 RankedStarsDisplayMode.ScoreSaberOnly => RankedStarsDisplayMode.BeatLeaderOnly,
                 RankedStarsDisplayMode.BeatLeaderOnly => RankedStarsDisplayMode.AccSaberOnly,
                 RankedStarsDisplayMode.AccSaberOnly => RankedStarsDisplayMode.Both,
+                RankedStarsDisplayMode.Both => RankedStarsDisplayMode.All,
                 _ => RankedStarsDisplayMode.ScoreSaberOnly
             };
         }
@@ -587,6 +619,7 @@ namespace BeatLeader.Components {
                 RankedStarsDisplayMode.ScoreSaberOnly => $"<color={BeatLeaderDarkGoldTheme.ScoreSaberPpHtml}>SS</color>",
                 RankedStarsDisplayMode.BeatLeaderOnly => $"<color={BeatLeaderDarkGoldTheme.BeatLeaderPpHtml}>BL</color>",
                 RankedStarsDisplayMode.AccSaberOnly => $"<color={BeatLeaderDarkGoldTheme.AccSaberApHtml}>Acc</color>",
+                RankedStarsDisplayMode.All => $"<color={BeatLeaderDarkGoldTheme.ScoreSaberPpHtml}>A</color><color={BeatLeaderDarkGoldTheme.BeatLeaderPpHtml}>l</color><color={BeatLeaderDarkGoldTheme.AccSaberApHtml}>l</color>",
                 _ => $"<color={BeatLeaderDarkGoldTheme.ScoreSaberPpHtml}>SS</color><color={BeatLeaderDarkGoldTheme.TextMutedHtml}>+</color><color={BeatLeaderDarkGoldTheme.BeatLeaderPpHtml}>BL</color>"
             };
         }

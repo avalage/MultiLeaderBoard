@@ -57,6 +57,22 @@ namespace BeatLeader {
 
         #endregion
 
+        #region LeaderboardOtherScoreBackgroundOpacity
+
+        public const float LeaderboardOtherScoreBackgroundOpacity = 1.0f;
+
+        #endregion
+
+        #region ScoreSubmission
+
+        public const bool ScoreSubmissionsEnabled = true;
+
+        public const bool BeatLeaderScoreSubmissionEnabled = true;
+
+        public const bool ScoreSaberScoreSubmissionEnabled = true;
+
+        #endregion
+
         #region HubTheme
 
         public static readonly BeatLeaderHubTheme HubTheme = new() {

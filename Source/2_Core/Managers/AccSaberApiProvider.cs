@@ -10,7 +10,7 @@ namespace BeatLeader {
         private const string OverallCategoryId = "b0000000-0000-0000-0000-000000000005";
         private static readonly TimeSpan ScoreCacheTtl = TimeSpan.FromMinutes(10);
         private static readonly TimeSpan MissingScoreCacheTtl = TimeSpan.FromMinutes(3);
-        private static readonly TimeSpan ProfileCacheTtl = TimeSpan.FromMinutes(10);
+        private static readonly TimeSpan ProfileCacheTtl = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan DifficultyCacheTtl = TimeSpan.FromMinutes(15);
         private static readonly Dictionary<string, AccSaberScoreCacheEntry> ScoreCache = new();
         private static readonly Dictionary<string, AccSaberProfileCacheEntry> ProfileCache = new();
@@ -32,8 +32,9 @@ namespace BeatLeader {
             return $"{ApiBaseUrl}/users/{escapedPlayerId}/scores/by-hash/{hash}?difficulty={difficulty}&characteristic=Standard";
         }
 
-        public static string BuildProfileUrl(string playerId) {
-            return $"{ApiBaseUrl}/users/{Uri.EscapeDataString(playerId)}?statistics=true";
+        public static string BuildProfileUrl(string playerId, bool bypassCache = false) {
+            var url = $"{ApiBaseUrl}/users/{Uri.EscapeDataString(playerId)}?statistics=true";
+            return bypassCache ? $"{url}&_={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}" : url;
         }
 
         public static string BuildDifficultyInfoUrl(LeaderboardKey leaderboardKey) {
@@ -65,6 +66,14 @@ namespace BeatLeader {
             );
         }
 
+        public static void ClearScoreCache(LeaderboardKey leaderboardKey, string playerId) {
+            if (string.IsNullOrEmpty(playerId)) {
+                return;
+            }
+
+            ScoreCache.Remove(ScoreCacheKey(leaderboardKey, playerId));
+        }
+
         public static bool TryGetCachedProfile(string playerId, out AccSaberProfileInfo info) {
             info = default;
             if (!ProfileCache.TryGetValue(playerId, out var cacheEntry)) {
@@ -85,6 +94,14 @@ namespace BeatLeader {
                 info,
                 DateTime.UtcNow.Add(ProfileCacheTtl)
             );
+        }
+
+        public static void ClearProfileCache(string playerId) {
+            if (string.IsNullOrEmpty(playerId)) {
+                return;
+            }
+
+            ProfileCache.Remove(playerId);
         }
 
         public static bool TryGetCachedDifficulty(LeaderboardKey leaderboardKey, out AccSaberDifficultyInfo info) {

@@ -30,17 +30,20 @@ namespace BeatLeader.UI.Hub {
 
         private bool _initialMenuButtonEnabled;
         private bool _initialNoticeboardEnabled;
+        private bool _initialScoreSubmissionsEnabled;
         private BLLanguage _initialLanguage;
         private BeatLeaderServer _initialServer;
 
         public void CancelSelection() {
             BeatLeaderMenuButtonManager.MenuButtonEnabled = _initialMenuButtonEnabled;
             PluginConfig.NoticeboardEnabled = _initialNoticeboardEnabled;
+            PluginConfig.ScoreSubmissionsEnabled = _initialScoreSubmissionsEnabled;
             PluginConfig.SelectedLanguage = _initialLanguage;
             PluginConfig.MainServer = _initialServer;
 
             _menuButtonToggle.SetActive(_initialMenuButtonEnabled);
             _noticeboardToggle.SetActive(_initialNoticeboardEnabled);
+            _scoreSubmissionsToggle.SetActive(_initialScoreSubmissionsEnabled);
             _languageDropdown.Select(_initialLanguage);
             _serverDropdown.Select(_initialServer);
         }
@@ -48,6 +51,7 @@ namespace BeatLeader.UI.Hub {
         private void SaveInitialValues() {
             _initialMenuButtonEnabled = BeatLeaderMenuButtonManager.MenuButtonEnabled;
             _initialNoticeboardEnabled = PluginConfig.NoticeboardEnabled;
+            _initialScoreSubmissionsEnabled = PluginConfig.ScoreSubmissionsEnabled;
             _initialLanguage = PluginConfig.SelectedLanguage;
             _initialServer = PluginConfig.MainServer;
         }
@@ -64,6 +68,7 @@ namespace BeatLeader.UI.Hub {
 
         private Toggle _menuButtonToggle = null!;
         private Toggle _noticeboardToggle = null;
+        private Toggle _scoreSubmissionsToggle = null;
         private TextDropdown<BLLanguage> _languageDropdown = null!;
         private TextDropdown<BeatLeaderServer> _serverDropdown = null!;
         private ReloadNotice _reloadNotice = null!;
@@ -111,6 +116,15 @@ namespace BeatLeader.UI.Hub {
                         )
                         .InNamedRail("Experience Bar"),
                     //
+                    new Toggle()
+                        .With(x => x.SetActive(PluginConfig.ScoreSubmissionsEnabled, false))
+                        .WithListener(
+                            x => x.Active,
+                            HandleScoreSubmissionsEnabled
+                        )
+                        .Bind(ref _scoreSubmissionsToggle)
+                        .InNamedRail("Upload Scores"),
+                    //
                     new ReloadNotice()
                         .AsFlexItem(margin: new() { top = 4f })
                         .Bind(ref _reloadNotice)
@@ -157,6 +171,10 @@ namespace BeatLeader.UI.Hub {
         private void HandleEnableExperienceBar(bool enabled) {
             ConfigFileData.Instance.ExperienceBarEnabled = enabled;
             ExperienceBarConfigEvent?.Invoke(enabled);
+        }
+
+        private void HandleScoreSubmissionsEnabled(bool enabled) {
+            PluginConfig.ScoreSubmissionsEnabled = enabled;
         }
 
         #endregion

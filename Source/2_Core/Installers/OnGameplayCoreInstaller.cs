@@ -109,6 +109,9 @@ namespace BeatLeader.Installers {
             Container.BindInterfacesTo<ReplayerCameraController>().FromNewComponentOnNewGameObject().AsSingle().NonLazy();
             Container.Bind<TweaksHandler>().FromNewComponentOnNewGameObject().AsSingle().NonLazy();
             Container.Bind<HotkeysHandler>().FromNewComponentOnNewGameObject().AsSingle().NonLazy();
+            if (!InputUtils.UsesFPFC) {
+                Container.Bind<ReplayerStickControls>().FromNewComponentOnNewGameObject().AsSingle().NonLazy();
+            }
             Container.BindInterfacesAndSelfTo<ReplayWatermark>().FromNewComponentOnNewGameObject().AsSingle().NonLazy();
 
             //UI

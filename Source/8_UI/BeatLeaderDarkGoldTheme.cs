@@ -125,10 +125,11 @@ namespace BeatLeader.UI {
             Color = Enabled ? WithAlpha(TextSecondary, 0.22f) : WithAlpha(Color.white * 0.8f, 0.2f)
         };
 
-        public static Color RowBackground(bool selected, float alpha) {
+        public static Color RowBackground(bool selected, float alpha, float opacity = 1.0f) {
             var color = selected
                 ? (Enabled ? WithAlpha(AccentGold, 0.50f) : new Color(0.7f, 0f, 0.7f, 0.3f))
                 : (Enabled ? WithAlpha(PanelDark2, 0.18f) : new Color(0.07f, 0f, 0.14f, 0.05f));
+            if (!selected) color.a *= Mathf.Clamp01(opacity);
             color.a *= alpha;
             return color;
         }

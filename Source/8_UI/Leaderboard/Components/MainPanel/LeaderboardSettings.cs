@@ -31,6 +31,32 @@ namespace BeatLeader.Components {
 
         #region Toggles
 
+        private static readonly float[] OtherScoreBackgroundOpacityValues = {
+            1.0f,
+            0.66f,
+            0.33f,
+            0.0f
+        };
+
+        [UIValue("row-background-opacity-text"), UsedImplicitly]
+        private string RowBackgroundOpacityText =>
+            $"Rows BG: {Mathf.RoundToInt(PluginConfig.LeaderboardOtherScoreBackgroundOpacity * 100.0f)}%";
+
+        [UIAction("row-background-opacity-click"), UsedImplicitly]
+        private void RowBackgroundOpacityClick() {
+            var currentValue = PluginConfig.LeaderboardOtherScoreBackgroundOpacity;
+            var nextValue = OtherScoreBackgroundOpacityValues[0];
+
+            for (var i = 0; i < OtherScoreBackgroundOpacityValues.Length; i++) {
+                if (Mathf.Abs(currentValue - OtherScoreBackgroundOpacityValues[i]) > 0.02f) continue;
+                nextValue = OtherScoreBackgroundOpacityValues[(i + 1) % OtherScoreBackgroundOpacityValues.Length];
+                break;
+            }
+
+            PluginConfig.LeaderboardOtherScoreBackgroundOpacity = nextValue;
+            NotifyPropertyChanged(nameof(RowBackgroundOpacityText));
+        }
+
         [UIValue("avatar-mask-value"), UsedImplicitly]
         private bool AvatarMaskValue {
             get => PluginConfig.LeaderboardTableMask.HasFlag(ScoreRowCellType.Avatar);

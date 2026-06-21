@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using BeatLeader.Models;
 using BeatLeader.UI;
 using BeatSaberMarkupLanguage.Attributes;
@@ -68,6 +69,7 @@ namespace BeatLeader.Components {
                 RankedStarsDisplayMode.ScoreSaberOnly => ScoreSaberOnlyText(),
                 RankedStarsDisplayMode.BeatLeaderOnly => BeatLeaderOnlyText(),
                 RankedStarsDisplayMode.AccSaberOnly => AccSaberOnlyText(),
+                RankedStarsDisplayMode.All => AllText(),
                 _ => BothText()
             };
         }
@@ -77,19 +79,11 @@ namespace BeatLeader.Components {
         }
 
         private string ScoreSaberOnlyText() {
-            if (_scoreSaberLeaderboardInfo.IsRanked) {
-                return ScoreSaberText(true);
-            }
-
-            if (_rankedStatus is not RankedStatus.Ranked) {
-                return BeatLeaderFallbackText();
-            }
-
-            return _scoreSaberLeaderboardInfo.IsKnown ? ScoreSaberText(true) : BeatLeaderFallbackText();
+            return _scoreSaberLeaderboardInfo.IsKnown ? ScoreSaberText(true) : ScoreSaberUnrankedText();
         }
 
         private string AccSaberOnlyText() {
-            return _accSaberDifficultyInfo.IsKnown ? AccSaberText(true) : BeatLeaderFallbackText();
+            return _accSaberDifficultyInfo.IsKnown ? AccSaberText(true) : AccSaberUnrankedText();
         }
 
         private string BothText() {
@@ -104,6 +98,25 @@ namespace BeatLeader.Components {
             }
 
             return beatLeaderRanked ? BeatLeaderText(true) : ScoreSaberText(true);
+        }
+
+        private string AllText() {
+            var parts = new List<string>(3);
+            if (_scoreSaberLeaderboardInfo.IsRanked) {
+                parts.Add(ScoreSaberText(false));
+            }
+
+            if (_rankedStatus is RankedStatus.Ranked) {
+                parts.Add(BeatLeaderText(false));
+            }
+
+            if (_accSaberDifficultyInfo.IsKnown) {
+                parts.Add(AccSaberText(false));
+            }
+
+            return parts.Count == 0
+                ? BeatLeaderFallbackText()
+                : string.Join($" <color={BeatLeaderDarkGoldTheme.TextMutedHtml}>/</color> ", parts);
         }
 
         private string BeatLeaderFallbackText() {
@@ -151,6 +164,10 @@ namespace BeatLeader.Components {
             return $"<color={BeatLeaderDarkGoldTheme.ScoreSaberPpHtml}>{text}</color>";
         }
 
+        private static string ScoreSaberUnrankedText() {
+            return $"<color={BeatLeaderDarkGoldTheme.ScoreSaberPpHtml}>Unranked</color>";
+        }
+
         private string AccSaberText(bool includeStatus) {
             var text = "Acc";
             if (_accSaberDifficultyInfo.Complexity > 0.0f) {
@@ -158,6 +175,10 @@ namespace BeatLeader.Components {
             }
 
             return $"<color={BeatLeaderDarkGoldTheme.AccSaberApHtml}>{text}</color>";
+        }
+
+        private static string AccSaberUnrankedText() {
+            return $"<color={BeatLeaderDarkGoldTheme.AccSaberApHtml}>Unranked</color>";
         }
 
         #endregion

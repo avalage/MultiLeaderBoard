@@ -142,6 +142,7 @@ namespace BeatLeader.Components {
 
         protected override void OnInitialize() {
             InitializeCells();
+            PluginConfig.LeaderboardOtherScoreBackgroundOpacityChangedEvent += OnOtherScoreBackgroundOpacityChanged;
 
             if (BeatLeaderDarkGoldTheme.Enabled) {
                 _background.material = GameResources.UINoGlowMaterial;
@@ -156,6 +157,7 @@ namespace BeatLeader.Components {
         }
 
         protected override void OnDispose() {
+            PluginConfig.LeaderboardOtherScoreBackgroundOpacityChangedEvent -= OnOtherScoreBackgroundOpacityChanged;
             Destroy(_underlineMaterialInstance);
         }
 
@@ -391,11 +393,23 @@ namespace BeatLeader.Components {
                     color.a *= _currentAlpha;
                     _background.color = color;
                 } else {
-                    _background.color = BeatLeaderDarkGoldTheme.RowBackground(false, _currentAlpha);
+                    _background.color = BeatLeaderDarkGoldTheme.RowBackground(
+                        false,
+                        _currentAlpha,
+                        PluginConfig.LeaderboardOtherScoreBackgroundOpacity
+                    );
                 }
             } else {
-                _background.color = BeatLeaderDarkGoldTheme.RowBackground(highlight, _currentAlpha);
+                _background.color = BeatLeaderDarkGoldTheme.RowBackground(
+                    highlight,
+                    _currentAlpha,
+                    highlight ? 1.0f : PluginConfig.LeaderboardOtherScoreBackgroundOpacity
+                );
             }
+        }
+
+        private void OnOtherScoreBackgroundOpacityChanged(float value) {
+            MarkVisualsDirty();
         }
 
         private void SetHighlight(bool highlight) {

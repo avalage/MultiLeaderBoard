@@ -10,5 +10,7 @@
         <toggle-setting text="&lt;bll&gt;ls-mistakes&lt;/bll&gt;" value="mistakes-mask-value" apply-on-change="true"/>
         <toggle-setting text="&lt;bll&gt;ls-pauses&lt;/bll&gt;" value="pauses-mask-value" apply-on-change="true"/>
         <toggle-setting text="Clan Capture" value="clan-capture-value" apply-on-change="true"/>
+        <!-- Temporarily hidden; code/config kept for future use. -->
+        <button active="false" text="~row-background-opacity-text" pref-height="6" on-click="row-background-opacity-click"/>
     </vertical>
 </vertical>

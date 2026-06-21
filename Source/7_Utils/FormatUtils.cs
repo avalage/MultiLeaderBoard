@@ -367,7 +367,7 @@ namespace BeatLeader {
         public static string FormatPerformancePoints(ScoreRowPerformancePoints value) {
             var parts = new List<string>(3);
             if (value.HasBeatLeaderValue) {
-                parts.Add($"<color={BeatLeaderPPColor}>{value.BeatLeaderValue:F1}</color>");
+                parts.Add($"<color={BeatLeaderPPColor}>{value.BeatLeaderValue:F1}<size=70%>pp</size></color>");
             }
 
             if (value.HasScoreSaberValue) {

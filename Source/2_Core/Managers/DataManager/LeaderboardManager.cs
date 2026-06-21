@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Threading.Tasks;
 using BeatLeader.APIV2;
+using BeatLeader.Core.Managers.ReplayEnhancer;
 using BeatLeader.Manager;
 using BeatLeader.Models;
 using BeatLeader.WebRequests;
@@ -114,18 +116,45 @@ namespace BeatLeader.DataManager {
             }
         }
 
-        private void LoadPlayerScores() {
-            if (!ProfileManager.TryGetUserId(out var userId)) return;
-            ScoresRequest.SendPage(_lastSelectedBeatmap, userId, Context, Scope, _lastSelectedPage);
+        private async void LoadPlayerScores() {
+            var beatmap = _lastSelectedBeatmap;
+            var context = Context;
+            var scope = Scope;
+            var page = _lastSelectedPage;
+            var userId = await GetScoresUserId();
+            if (string.IsNullOrEmpty(userId) || !beatmap.Equals(_lastSelectedBeatmap)) return;
+            ScoresRequest.SendPage(beatmap, userId, context, scope, page);
         }
 
-        private void SeekPlayerScores() {
-            if (!ProfileManager.TryGetUserId(out var userId)) return;
-            ScoresRequest.SendSeek(_lastSelectedBeatmap, userId, Context, Scope);
+        private async void SeekPlayerScores() {
+            var beatmap = _lastSelectedBeatmap;
+            var context = Context;
+            var scope = Scope;
+            var userId = await GetScoresUserId();
+            if (string.IsNullOrEmpty(userId) || !beatmap.Equals(_lastSelectedBeatmap)) return;
+            ScoresRequest.SendSeek(beatmap, userId, context, scope);
         }
 
         private void LoadClanScores() {
             ClanScoresRequest.Send(_lastSelectedBeatmap, _lastSelectedPage);
+        }
+
+        private static async Task<string?> GetScoresUserId() {
+            if (ProfileManager.TryGetUserId(out var profileUserId) && !string.IsNullOrEmpty(profileUserId)) {
+                return profileUserId;
+            }
+
+            try {
+                var userInfo = await UserEnhancer.GetUserAsync();
+                if (!string.IsNullOrEmpty(userInfo?.platformUserId)) {
+                    Plugin.Log.Debug($"Using platform user id as leaderboard fallback: {userInfo.platformUserId}");
+                    return userInfo.platformUserId;
+                }
+            } catch (Exception ex) {
+                Plugin.Log.Debug($"Could not resolve fallback platform user id for leaderboard scores: {ex.Message}");
+            }
+
+            return null;
         }
 
         #endregion

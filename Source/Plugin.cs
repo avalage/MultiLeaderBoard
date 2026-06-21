@@ -30,10 +30,12 @@ namespace BeatLeader {
         #region Init
 
         internal static IPALogger Log { get; private set; }
+        internal static PluginMetadata Metadata { get; private set; }
 
         [Init]
         public Plugin(IPALogger logger, PluginMetadata metadata) {
             Log = logger;
+            Metadata = metadata;
             Version = metadata.HVersion;
             
             ConfigFileData.Initialize();
@@ -48,6 +50,7 @@ namespace BeatLeader {
         [UsedImplicitly]
         public void OnApplicationStart() {
             OnEnabledChanged(PluginConfig.Enabled);
+            ScoreSubmissionManager.RefreshInstalledMods();
             MainMenuAwaiter.MainMenuInitializing += MainMenuInit;
             InteropLoader.Init();
 

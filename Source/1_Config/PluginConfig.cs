@@ -119,6 +119,55 @@ namespace BeatLeader {
 
         #endregion
 
+        #region LeaderboardOtherScoreBackgroundOpacity
+
+        public static event Action<float> LeaderboardOtherScoreBackgroundOpacityChangedEvent;
+
+        public static float LeaderboardOtherScoreBackgroundOpacity {
+            get => ConfigFileData.Instance.LeaderboardOtherScoreBackgroundOpacity;
+            set {
+                value = Math.Max(0.0f, Math.Min(1.0f, value));
+                if (Math.Abs(ConfigFileData.Instance.LeaderboardOtherScoreBackgroundOpacity - value) < 0.001f) return;
+                ConfigFileData.Instance.LeaderboardOtherScoreBackgroundOpacity = value;
+                LeaderboardOtherScoreBackgroundOpacityChangedEvent?.Invoke(value);
+            }
+        }
+
+        #endregion
+
+        #region ScoreSubmission
+
+        public static event Action ScoreSubmissionSettingsChangedEvent;
+
+        public static bool ScoreSubmissionsEnabled {
+            get => ConfigFileData.Instance.ScoreSubmissionsEnabled;
+            set {
+                if (ConfigFileData.Instance.ScoreSubmissionsEnabled == value) return;
+                ConfigFileData.Instance.ScoreSubmissionsEnabled = value;
+                ScoreSubmissionSettingsChangedEvent?.Invoke();
+            }
+        }
+
+        public static bool BeatLeaderScoreSubmissionEnabled {
+            get => ConfigFileData.Instance.BeatLeaderScoreSubmissionEnabled;
+            set {
+                if (ConfigFileData.Instance.BeatLeaderScoreSubmissionEnabled == value) return;
+                ConfigFileData.Instance.BeatLeaderScoreSubmissionEnabled = value;
+                ScoreSubmissionSettingsChangedEvent?.Invoke();
+            }
+        }
+
+        public static bool ScoreSaberScoreSubmissionEnabled {
+            get => ConfigFileData.Instance.ScoreSaberScoreSubmissionEnabled;
+            set {
+                if (ConfigFileData.Instance.ScoreSaberScoreSubmissionEnabled == value) return;
+                ConfigFileData.Instance.ScoreSaberScoreSubmissionEnabled = value;
+                ScoreSubmissionSettingsChangedEvent?.Invoke();
+            }
+        }
+
+        #endregion
+
         #region ReplayerSettings
 
         public static event Action<ReplayerSettings> ReplayerSettingsChangedEvent;

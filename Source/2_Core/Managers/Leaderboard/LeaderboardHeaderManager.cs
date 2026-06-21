@@ -55,6 +55,8 @@ namespace BeatLeader {
         private bool _originalHeaderPreserveAspect;
         private Color _originalHeaderColor;
         private Vector3 _originalHeaderScale;
+        private const float DarkGoldHeaderBackgroundScaleX = 1.10f;
+        private const float DarkGoldHeaderBackgroundScaleY = 1.08f;
 
         private void LazyInit() {
             if (_initialized || _failed) return;
@@ -238,7 +240,11 @@ namespace BeatLeader {
             rectTransform.offsetMin = Vector2.zero;
             rectTransform.offsetMax = Vector2.zero;
             rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            rectTransform.localScale = new Vector3(1.20f, 1.56f, 1.0f);
+            rectTransform.localScale = new Vector3(
+                DarkGoldHeaderBackgroundScaleX,
+                DarkGoldHeaderBackgroundScaleY,
+                1.0f
+            );
 
             return image;
         }
