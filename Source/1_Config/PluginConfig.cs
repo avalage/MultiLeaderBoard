@@ -3,6 +3,10 @@ using BeatLeader.Models;
 
 namespace BeatLeader {
     internal static class PluginConfig {
+        private static void Save() {
+            if (ConfigFileData.IsInitialized) ConfigFileData.Save();
+        }
+
         #region Enabled
 
         public static bool Enabled {
@@ -69,6 +73,7 @@ namespace BeatLeader {
             set {
                 if (ConfigFileData.Instance.LeaderboardTableMask.Equals(value)) return;
                 ConfigFileData.Instance.LeaderboardTableMask = value;
+                Save();
                 LeaderboardTableMaskChangedEvent?.Invoke(value);
             }
         }
@@ -85,6 +90,7 @@ namespace BeatLeader {
             set
             {
                 ConfigFileData.Instance.LeaderboardDisplaySettings = value;
+                Save();
                 LeaderboardDisplaySettingsChangedEvent?.Invoke(value);
             }
         }
@@ -129,6 +135,7 @@ namespace BeatLeader {
                 value = Math.Max(0.0f, Math.Min(1.0f, value));
                 if (Math.Abs(ConfigFileData.Instance.LeaderboardOtherScoreBackgroundOpacity - value) < 0.001f) return;
                 ConfigFileData.Instance.LeaderboardOtherScoreBackgroundOpacity = value;
+                Save();
                 LeaderboardOtherScoreBackgroundOpacityChangedEvent?.Invoke(value);
             }
         }
@@ -144,7 +151,17 @@ namespace BeatLeader {
             set {
                 if (ConfigFileData.Instance.ScoreSubmissionsEnabled == value) return;
                 ConfigFileData.Instance.ScoreSubmissionsEnabled = value;
+                Save();
                 ScoreSubmissionSettingsChangedEvent?.Invoke();
+            }
+        }
+
+        public static bool ScoreSubmissionsAutoDisabledByConflict {
+            get => ConfigFileData.Instance.ScoreSubmissionsAutoDisabledByConflict;
+            set {
+                if (ConfigFileData.Instance.ScoreSubmissionsAutoDisabledByConflict == value) return;
+                ConfigFileData.Instance.ScoreSubmissionsAutoDisabledByConflict = value;
+                Save();
             }
         }
 
@@ -153,6 +170,7 @@ namespace BeatLeader {
             set {
                 if (ConfigFileData.Instance.BeatLeaderScoreSubmissionEnabled == value) return;
                 ConfigFileData.Instance.BeatLeaderScoreSubmissionEnabled = value;
+                Save();
                 ScoreSubmissionSettingsChangedEvent?.Invoke();
             }
         }
@@ -162,6 +180,7 @@ namespace BeatLeader {
             set {
                 if (ConfigFileData.Instance.ScoreSaberScoreSubmissionEnabled == value) return;
                 ConfigFileData.Instance.ScoreSaberScoreSubmissionEnabled = value;
+                Save();
                 ScoreSubmissionSettingsChangedEvent?.Invoke();
             }
         }

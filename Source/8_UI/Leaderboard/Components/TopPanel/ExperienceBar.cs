@@ -1,5 +1,6 @@
 ﻿using BeatLeader.APIV2;
 using System.Reflection;
+using BeatLeader.DataManager;
 using BeatLeader.Manager;
 using BeatLeader.Models;
 using BeatLeader.UI;
@@ -11,6 +12,7 @@ using BeatSaberMarkupLanguage.Components;
 using JetBrains.Annotations;
 using UnityEngine;
 using UnityEngine.UI;
+using UploadReplayRequest = BeatLeader.APIV2.UploadReplayRequest;
 
 namespace BeatLeader.Components {
     internal class ExperienceBar : ReeUIComponentV2 {
@@ -129,6 +131,10 @@ namespace BeatLeader.Components {
             SetMaterial();
             GlobalSettingsView.ExperienceBarConfigEvent += OnExperienceBarConfigChanged;
             UserRequest.StateChangedEvent += OnProfileRequestStateChanged;
+            ProfileManager.ProfileUpdatedEvent += OnProfileUpdated;
+            if (ProfileManager.HasProfile && ProfileManager.Profile != null) {
+                OnProfileUpdated(ProfileManager.Profile);
+            }
             if (ConfigFileData.Instance.ExperienceBarEnabled) {
                 UploadReplayRequest.StateChangedEvent += OnUploadStateChanged;
                 PrestigeRequest.StateChangedEvent += OnPrestigeRequestStateChanged;
@@ -143,6 +149,7 @@ namespace BeatLeader.Components {
         protected override void OnDispose() {
             GlobalSettingsView.ExperienceBarConfigEvent -= OnExperienceBarConfigChanged;
             UserRequest.StateChangedEvent -= OnProfileRequestStateChanged;
+            ProfileManager.ProfileUpdatedEvent -= OnProfileUpdated;
             UploadReplayRequest.StateChangedEvent -= OnUploadStateChanged;
             PrestigeRequest.StateChangedEvent -= OnPrestigeRequestStateChanged;
         }
@@ -174,11 +181,22 @@ namespace BeatLeader.Components {
         }
 
         private void OnProfileRequestStateChanged(IWebRequest<Player> instance, RequestState state, string? failReason) {
-            if (state is not RequestState.Finished || (_initialized && (_isIdle || _isAnimated))) {
+            if (state is not RequestState.Finished) {
                 return;
             }
 
-            Player player = instance.Result;
+            ApplyProfileExperience(instance.Result);
+        }
+
+        private void OnProfileUpdated(Player player) {
+            ApplyProfileExperience(player);
+        }
+
+        private void ApplyProfileExperience(Player player) {
+            if (_initialized && (_isIdle || _isAnimated)) {
+                return;
+            }
+
             _level = player.level;
             _currentExperience = player.experience;
             _requiredExp = CalculateRequiredExperience(player.level, player.prestige);

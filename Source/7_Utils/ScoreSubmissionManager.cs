@@ -27,6 +27,19 @@ namespace BeatLeader.Utils {
         public static void RefreshInstalledMods() {
             OriginalScoreSaberInstalled = PluginManager.GetPluginFromId(ScoreSaberPluginId) != null;
             OriginalBeatLeaderInstalled = HasOriginalBeatLeaderInstall();
+            var globalUploadConflict = OriginalBeatLeaderInstalled;
+
+            if (globalUploadConflict) {
+                PluginConfig.ScoreSubmissionsAutoDisabledByConflict = true;
+                if (PluginConfig.ScoreSubmissionsEnabled) {
+                    PluginConfig.ScoreSubmissionsEnabled = false;
+                    Plugin.Log.Info("[ScoreSubmission] Disabled MultiLeaderboard score upload because original BeatLeader is installed.");
+                }
+            } else if (!globalUploadConflict && PluginConfig.ScoreSubmissionsAutoDisabledByConflict) {
+                PluginConfig.ScoreSubmissionsAutoDisabledByConflict = false;
+                PluginConfig.ScoreSubmissionsEnabled = true;
+                Plugin.Log.Info("[ScoreSubmission] Re-enabled MultiLeaderboard score upload because original BeatLeader is not installed.");
+            }
 
             Plugin.Log.Info(
                 $"[ScoreSubmission] Original mods: BeatLeader={OriginalBeatLeaderInstalled}, ScoreSaber={OriginalScoreSaberInstalled}. " +

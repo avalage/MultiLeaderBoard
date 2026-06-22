@@ -13,25 +13,41 @@ namespace BeatLeader {
     internal class ConfigFileData {
         #region Serialization
 
-        private const string ConfigPath = "UserData\\BeatLeader.json";
+        private const string ConfigPath = "UserData\\MultiLeaderboard.json";
+        private const string LegacyConfigPath = "UserData\\BeatLeader.json";
 
         public static void Initialize() {
-            if (File.Exists(ConfigPath)) {
-                var text = File.ReadAllText(ConfigPath);
+            if (TryLoad(ConfigPath, out var instance)) {
+                Instance = instance!;
+                return;
+            }
 
-                try {
-                    var instance = JsonConvert.DeserializeObject<ConfigFileData>(text);
-
-                    Instance = instance ?? throw new Exception("A deserialized instance was null");
-
-                    Plugin.Log.Debug("Config initialized");
-                    return;
-                } catch (Exception ex) {
-                    Plugin.Log.Error($"Failed to load config (default will be used):\n{ex}");
-                }
+            if (!File.Exists(ConfigPath) && TryLoad(LegacyConfigPath, out instance)) {
+                Instance = instance!;
+                Plugin.Log.Info("Migrated BeatLeader config to MultiLeaderboard config.");
+                Save();
+                return;
             }
 
             Instance = new();
+        }
+
+        private static bool TryLoad(string path, out ConfigFileData? instance) {
+            instance = null;
+            if (!File.Exists(path)) return false;
+
+            var text = File.ReadAllText(path);
+
+            try {
+                instance = JsonConvert.DeserializeObject<ConfigFileData>(text);
+                if (instance == null) throw new Exception("A deserialized instance was null");
+
+                Plugin.Log.Debug($"Config initialized from {path}");
+                return true;
+            } catch (Exception ex) {
+                Plugin.Log.Error($"Failed to load config from {path}:\n{ex}");
+                return false;
+            }
         }
 
         public static void Save() {
@@ -46,6 +62,11 @@ namespace BeatLeader {
                         }
                     }
                 );
+
+                var directory = Path.GetDirectoryName(ConfigPath);
+                if (!string.IsNullOrEmpty(directory)) {
+                    Directory.CreateDirectory(directory);
+                }
 
                 File.WriteAllText(ConfigPath, text);
                 Plugin.Log.Debug("Config saved");
@@ -85,6 +106,7 @@ namespace BeatLeader {
         public float LeaderboardOtherScoreBackgroundOpacity = ConfigDefaults.LeaderboardOtherScoreBackgroundOpacity;
         public bool ExperienceBarEnabled = true;
         public bool ScoreSubmissionsEnabled = ConfigDefaults.ScoreSubmissionsEnabled;
+        public bool ScoreSubmissionsAutoDisabledByConflict = ConfigDefaults.ScoreSubmissionsAutoDisabledByConflict;
         public bool BeatLeaderScoreSubmissionEnabled = ConfigDefaults.BeatLeaderScoreSubmissionEnabled;
         public bool ScoreSaberScoreSubmissionEnabled = ConfigDefaults.ScoreSaberScoreSubmissionEnabled;
 

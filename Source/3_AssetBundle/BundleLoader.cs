@@ -29,9 +29,108 @@ namespace BeatLeader {
             LoadMaterials(localAssetBundle);
             LoadPrefabs(localAssetBundle);
             LoadFonts(localAssetBundle);
+            BuildCompatibilityFallbacks();
 
             localAssetBundle.Unload(false);
             _ready = true;
+        }
+
+        private static void BuildCompatibilityFallbacks() {
+            if (Sprites == null) {
+                Plugin.Log.Warn("[BundleLoader] SpriteCollection was not loaded from asset bundle; using runtime fallback sprites.");
+                Sprites = ScriptableObject.CreateInstance<SpriteCollection>();
+                Sprites.rectangle = TransparentPixel ?? BlackTransparentBG ?? DefaultAvatar;
+                Sprites.background = BlackTransparentBG ?? TransparentPixel ?? DefaultAvatar;
+                Sprites.backgroundLeft = Sprites.background;
+                Sprites.backgroundRight = Sprites.background;
+                Sprites.backgroundBottom = Sprites.background;
+                Sprites.backgroundTop = Sprites.background;
+                Sprites.backgroundRightBottom = Sprites.background;
+                Sprites.backgroundUnderline = RowSeparatorIcon ?? Sprites.background;
+                Sprites.homeIcon = FindLoadedSprite("homeIcon", "HomeIcon", "BL_HomeIcon", "Home") ?? CreateFallbackHomeIcon();
+                Sprites.spinnerIcon = ProgressRingIcon ?? UnknownIcon;
+                Sprites.trashIcon = CrossIcon ?? UnknownIcon;
+                Sprites.editIcon = EditLayoutIcon ?? CrossIcon ?? UnknownIcon;
+                Sprites.curvatureIcon = RotateRightIcon ?? UnknownIcon;
+                Sprites.snapIcon = AnchorIcon ?? UnknownIcon;
+                Sprites.pinIcon = PinIcon ?? UnknownIcon;
+                Sprites.crossIcon = CrossIcon ?? UnknownIcon;
+                Sprites.rightArrowIcon = RightArrowIcon ?? UnknownIcon;
+                Sprites.plusIcon = CheckIcon ?? UnknownIcon;
+                Sprites.minusIcon = CrossIcon ?? UnknownIcon;
+                Sprites.ascendingIcon = UpOrDefault(TriangleFallbackDirection.Up);
+                Sprites.descendingIcon = UpOrDefault(TriangleFallbackDirection.Down);
+                Sprites.triangleIcon = Sprites.ascendingIcon;
+                Sprites.checkIcon = CheckIcon ?? UnknownIcon;
+                Sprites.inactiveCheckIcon = CheckIcon ?? UnknownIcon;
+                Sprites.glare = WhiteFrame ?? TransparentPixel ?? DefaultAvatar;
+                Sprites.transparentPixel = TransparentPixel ?? DefaultAvatar;
+            }
+
+            if (Materials == null) {
+                Plugin.Log.Warn("[BundleLoader] MaterialCollection was not loaded from asset bundle; using runtime fallback materials.");
+                Materials = ScriptableObject.CreateInstance<MaterialCollection>();
+                Materials.blurMaterial = UIBlurMaterial;
+                Materials.tintedBlurredBackgroundMaterial = UIBlurMaterial;
+                Materials.blurredBackgroundMaterial = UIBlurMaterial;
+                Materials.uiAdditiveGlowMaterial = UIAdditiveGlowMaterial;
+                Materials.uiNoDepthMaterial = UIAdditiveGlowMaterial;
+            }
+        }
+
+        private enum TriangleFallbackDirection {
+            Up,
+            Down
+        }
+
+        private static Sprite UpOrDefault(TriangleFallbackDirection _) {
+            return UnknownIcon ?? TransparentPixel ?? DefaultAvatar;
+        }
+
+        private static Sprite? FindLoadedSprite(params string[] names) {
+            if (_loadedSprites == null) return null;
+            return _loadedSprites.FirstOrDefault(sprite => names.Any(name => sprite.name == name));
+        }
+
+        private static Sprite CreateFallbackHomeIcon() {
+            const int size = 32;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) {
+                name = "MultiLeaderboardFallbackHomeIcon",
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            var clear = new Color32(0, 0, 0, 0);
+            var white = new Color32(255, 255, 255, 255);
+            var pixels = Enumerable.Repeat(clear, size * size).ToArray();
+
+            void SetPixel(int x, int y, Color32 color) {
+                if (x < 0 || x >= size || y < 0 || y >= size) return;
+                pixels[y * size + x] = color;
+            }
+
+            for (var y = 4; y <= 15; y++) {
+                for (var x = 8; x <= 24; x++) {
+                    SetPixel(x, y, white);
+                }
+            }
+
+            for (var y = 15; y <= 27; y++) {
+                var halfWidth = 29 - y;
+                for (var x = 16 - halfWidth; x <= 16 + halfWidth; x++) {
+                    SetPixel(x, y, white);
+                }
+            }
+
+            for (var y = 4; y <= 12; y++) {
+                for (var x = 14; x <= 18; x++) {
+                    SetPixel(x, y, clear);
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+
+            return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
         }
 
         #endregion

@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using BeatLeader.APIV2;
 using BeatLeader.Manager;
 using BeatLeader.Models;
+using BeatLeader.Models.Replay;
+using BeatLeader.Utils;
 using JetBrains.Annotations;
 using Zenject;
 
@@ -26,11 +29,20 @@ namespace BeatLeader.DataManager {
             private set {
                 _profile = value;
                 HasProfile = true;
+                if (value != null) {
+                    ProfileUpdatedEvent?.Invoke(value);
+                }
             }
         }
 
+        public static event Action<Player>? ProfileUpdatedEvent;
+
         private static TaskCompletionSource<object?>? _profileLoadTaskCompletionSource;
         private static Player? _profile;
+        private const int PostScoreProfileRefreshRetryCount = 5;
+        private static readonly TimeSpan PostScoreProfileRefreshInitialDelay = TimeSpan.FromSeconds(4);
+        private static readonly TimeSpan PostScoreProfileRefreshRetryDelay = TimeSpan.FromSeconds(8);
+        private static int _postScoreProfileRefreshRequestId;
 
         public static bool IsCurrentPlayer(string otherId) {
             return HasProfile && string.Equals(Profile!.id, otherId, StringComparison.Ordinal);
@@ -66,7 +78,7 @@ namespace BeatLeader.DataManager {
         private static void FinishTask() {
             if (!_initialized) return;
             AssignLoadProfileTaskIfNeeded();
-            _profileLoadTaskCompletionSource!.SetResult(null);
+            _profileLoadTaskCompletionSource!.TrySetResult(null);
         }
         
         #endregion
@@ -109,6 +121,7 @@ namespace BeatLeader.DataManager {
         public void Initialize() {
             UserRequest.StateChangedEvent += OnUserRequestStateChanged;
             UploadReplayRequest.StateChangedEvent += OnUploadRequestStateChanged;
+            ScoreUtil.ReplayProcessedEvent += OnReplayProcessed;
             AddFriendRequest.StateChangedEvent += OnAddFriendRequestStateChanged;
             RemoveFriendRequest.StateChangedEvent += OnRemoveFriendRequestStateChanged;
             LeaderboardEvents.AddFriendWasPressedEvent += OnAddFriendWasPressed;
@@ -123,6 +136,7 @@ namespace BeatLeader.DataManager {
             _initialized = false;
             UserRequest.StateChangedEvent -= OnUserRequestStateChanged;
             UploadReplayRequest.StateChangedEvent -= OnUploadRequestStateChanged;
+            ScoreUtil.ReplayProcessedEvent -= OnReplayProcessed;
             AddFriendRequest.StateChangedEvent -= OnAddFriendRequestStateChanged;
             RemoveFriendRequest.StateChangedEvent -= OnRemoveFriendRequestStateChanged;
             LeaderboardEvents.AddFriendWasPressedEvent -= OnAddFriendWasPressed;
@@ -181,6 +195,28 @@ namespace BeatLeader.DataManager {
         private static void OnUploadRequestStateChanged(WebRequests.IWebRequest<ScoreUploadResponse> instance, WebRequests.RequestState state, string? failReason) {
             if (state is not WebRequests.RequestState.Finished || instance.Result.Status != ScoreUploadStatus.Uploaded) return;
             Profile = instance.Result.Score.Player;
+        }
+
+        private static void OnReplayProcessed(Replay replay, PlayEndData data) {
+            SchedulePostScoreProfileRefresh("Replay processed");
+        }
+
+        private static void SchedulePostScoreProfileRefresh(string reason) {
+            var requestId = Interlocked.Increment(ref _postScoreProfileRefreshRequestId);
+            Plugin.Log.Debug($"[ProfileRefresh] {reason}; scheduling BeatLeader profile refresh.");
+            RefreshProfileAfterScoreAsync(requestId).RunCatching();
+        }
+
+        private static async Task RefreshProfileAfterScoreAsync(int requestId) {
+            for (var attempt = 0; attempt < PostScoreProfileRefreshRetryCount; attempt++) {
+                await Task.Delay(attempt == 0 ? PostScoreProfileRefreshInitialDelay : PostScoreProfileRefreshRetryDelay);
+
+                if (!_initialized || requestId != _postScoreProfileRefreshRequestId) {
+                    return;
+                }
+
+                UserRequest.Send();
+            }
         }
 
         #endregion

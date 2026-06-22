@@ -17,13 +17,13 @@ namespace BeatLeader {
         #region Constants
 
         internal const string ResourcesPath = "BeatLeader._9_Resources";
-        internal const string PluginId = "BeatLeader";
-        internal const string HarmonyId = "BeatLeader";
-        internal const string FancyName = "BeatLeader";
+        internal const string PluginId = "MultiLeaderboard";
+        internal const string HarmonyId = "MultiLeaderboard";
+        internal const string FancyName = "MultiLeaderboard";
 
         internal static string UserAgent = "PC mod";
 
-        internal static Version Version { get; private set; }
+        internal static Hive.Versioning.Version Version { get; private set; }
 
         #endregion
 
@@ -51,6 +51,8 @@ namespace BeatLeader {
         public void OnApplicationStart() {
             OnEnabledChanged(PluginConfig.Enabled);
             ScoreSubmissionManager.RefreshInstalledMods();
+            API.UploadReplayRequest.InitializeCompatibility();
+            GuildSaberCompatibilityPatches.ApplyRuntimePatches();
             MainMenuAwaiter.MainMenuInitializing += MainMenuInit;
             InteropLoader.Init();
 

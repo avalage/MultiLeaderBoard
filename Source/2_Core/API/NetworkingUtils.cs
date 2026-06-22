@@ -190,8 +190,7 @@ namespace BeatLeader.API {
             if (UserAgent != null) {
                 return UserAgent;
             } else {
-                PluginMetadata metaData = PluginManager.GetPluginFromId("BeatLeader");
-                UserAgent = $"PC mod {metaData.HVersion} / {Application.version}";
+                UserAgent = $"PC mod {Plugin.Version} / {Application.version}";
                 return UserAgent;
             }
         }

@@ -38,14 +38,15 @@ namespace BeatLeader.UI.Reactive.Components {
         private RectTransform _progressBar = null!;
 
         protected override GameObject Construct() {
+            var backgroundSprite = BundleLoader.Sprites?.background ?? BundleLoader.BlackTransparentBG ?? BundleLoader.TransparentPixel;
             return new Background {
-                Sprite = BundleLoader.Sprites.background,
+                Sprite = backgroundSprite,
                 PixelsPerUnit = 15f,
                 Color = (Color.white * 0.2f).ColorWithAlpha(0.5f),
 
                 Children = {
                     new Image {
-                        Sprite = BundleLoader.Sprites.background,
+                        Sprite = backgroundSprite,
                         PixelsPerUnit = 15f,
                         Color = UIStyle.ControlButtonColorSet.ActiveColor
                     }.Bind(ref _progressBar).Bind(ref _progressBarImage)

@@ -4,6 +4,7 @@ using BeatLeader.APIV2;
 using BeatLeader.Manager;
 using BeatLeader.Models;
 using BeatLeader.UI;
+using BeatLeader.Utils;
 using BeatSaberMarkupLanguage.Attributes;
 using JetBrains.Annotations;
 using UnityEngine;
@@ -43,7 +44,7 @@ namespace BeatLeader.Components {
                     ShowGoodNews("Your vote has been accepted!");
                     break;
                 case WebRequests.RequestState.Failed:
-                    ShowBadNews($"Vote failed! {failReason}");
+                    ShowBadNews($"Vote failed: {FormatFailReason(failReason)}");
                     break;
             }
         }
@@ -51,7 +52,7 @@ namespace BeatLeader.Components {
         private void OnProfileRequestStateChanged(WebRequests.IWebRequest<Player> instance, WebRequests.RequestState state, string? failReason) {
             switch (state) {
                 case WebRequests.RequestState.Failed:
-                    ShowBadNews($"Profile update failed! {failReason}");
+                    ShowBadNews($"Profile update failed: {FormatFailReason(failReason)}");
                     break;
             }
         }
@@ -64,12 +65,17 @@ namespace BeatLeader.Components {
                     }
                     break;
                 case WebRequests.RequestState.Failed:
-                    ShowBadNews($"Score upload failed! {failReason}");
+                    ShowBadNews($"Score upload failed: {FormatFailReason(failReason)}");
                     break;
             }
         }
 
         private void OnStatusMessage(string message, LeaderboardEvents.StatusMessageType type, float duration) {
+            if (WebRequestFailReasonFormatter.IsTimeout(message)) {
+                Plugin.Log.Debug($"Suppressed background status timeout message: {message}");
+                return;
+            }
+
             switch (type) {
                 case LeaderboardEvents.StatusMessageType.Neutral:
                     ShowMessage(message, duration);
@@ -98,6 +104,10 @@ namespace BeatLeader.Components {
 
         private void ShowBadNews(string message, float duration = DefaultDuration) {
             ShowMessage($"<color={BadNewsColor}>{message}", duration);
+        }
+
+        private static string FormatFailReason(string? failReason) {
+            return WebRequestFailReasonFormatter.Format(failReason);
         }
 
         private void ShowMessage(string message, float duration = DefaultDuration) {

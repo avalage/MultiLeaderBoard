@@ -1,7 +1,7 @@
 ﻿{
   "$schema": "https://raw.githubusercontent.com/bsmg/BSIPA-MetadataFileSchema/master/Schema.json",
-  "id": "BeatLeader",
-  "name": "BeatLeader",
+  "id": "MultiLeaderboard",
+  "name": "MultiLeaderboard",
   "author": "",
   "version": "0.10.0",
   "description": "beatleader.com | In-game leaderboards for custom and OST maps | Score replays | Clans, events, playlists and much more",

@@ -35,7 +35,7 @@ namespace BeatLeader {
         public override bool ShowForLevel(BeatmapKey? selectedLevel) {
             return true;
         }
-        protected override string leaderboardId => "BeatLeader";
+        protected override string leaderboardId => "MultiLeaderboard";
 
         #endregion
 

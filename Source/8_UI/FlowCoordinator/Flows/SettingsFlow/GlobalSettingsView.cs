@@ -2,6 +2,7 @@
 using BeatLeader.Components;
 using BeatLeader.Models;
 using BeatLeader.UI.Reactive.Components;
+using BeatLeader.Utils;
 using Reactive;
 using Reactive.BeatSaber.Components;
 using Reactive.Components;
@@ -49,11 +50,13 @@ namespace BeatLeader.UI.Hub {
         }
 
         private void SaveInitialValues() {
+            ScoreSubmissionManager.RefreshInstalledMods();
             _initialMenuButtonEnabled = BeatLeaderMenuButtonManager.MenuButtonEnabled;
             _initialNoticeboardEnabled = PluginConfig.NoticeboardEnabled;
             _initialScoreSubmissionsEnabled = PluginConfig.ScoreSubmissionsEnabled;
             _initialLanguage = PluginConfig.SelectedLanguage;
             _initialServer = PluginConfig.MainServer;
+            _scoreSubmissionsToggle?.SetActive(_initialScoreSubmissionsEnabled, false);
         }
 
         private void RefreshNotice() {
@@ -174,6 +177,7 @@ namespace BeatLeader.UI.Hub {
         }
 
         private void HandleScoreSubmissionsEnabled(bool enabled) {
+            PluginConfig.ScoreSubmissionsAutoDisabledByConflict = false;
             PluginConfig.ScoreSubmissionsEnabled = enabled;
         }
 

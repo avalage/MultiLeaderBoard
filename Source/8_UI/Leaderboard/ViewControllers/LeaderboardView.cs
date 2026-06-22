@@ -127,6 +127,20 @@ namespace BeatLeader.ViewControllers {
             ReeModalSystem.OpenModal<ScoreInfoPanel>(transform, (score, _navigatorWrapper), false);
         }
 
+        internal bool TryPresentScoreInfoModal(Score score) {
+            if (_battleRoyaleEnabled) {
+                return false;
+            }
+
+            PresentScoreInfoModal(score);
+            return true;
+        }
+
+        internal bool TryPresentClanScoreInfoModal(ClanScore score) {
+            PresentClanScoreInfoModal(score);
+            return true;
+        }
+
         private void PresentClanScoreInfoModal(ClanScore score) {
             var context = new ClanScorePanelContext {
                 beatmapKey = LeaderboardState.SelectedBeatmapKey,

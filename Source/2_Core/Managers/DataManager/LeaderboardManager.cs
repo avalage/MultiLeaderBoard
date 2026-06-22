@@ -9,6 +9,7 @@ using JetBrains.Annotations;
 using LeaderboardCore.Interfaces;
 using UnityEngine;
 using Zenject;
+using UploadReplayRequest = BeatLeader.APIV2.UploadReplayRequest;
 
 namespace BeatLeader.DataManager {
     internal class LeaderboardManager : MonoBehaviour, INotifyLeaderboardSet {

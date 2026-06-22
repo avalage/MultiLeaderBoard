@@ -133,8 +133,7 @@ namespace BeatLeader {
 
             UserEnhancer.Enhance(_replay);
 
-            var metaData = PluginManager.GetPluginFromId("BeatLeader");
-            _replay.info.version = metaData.HVersion.ToString();
+            _replay.info.version = Plugin.Version.ToString();
             _replay.info.gameVersion = Application.version;
             _replay.info.timestamp = Convert.ToString((int)DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds);
 

@@ -114,6 +114,7 @@ namespace BeatLeader.Components {
         }
 
         private void OnModifiersChanged(GameplayModifiers modifiers) {
+            if (_diffInfo == null) return;
             _gameplayModifiers = modifiers;
             _modifiersRating = GameplayModifiersPanelPatch.ModifiersRating;
             _modifiersMap = GameplayModifiersPanelPatch.ModifiersMap;

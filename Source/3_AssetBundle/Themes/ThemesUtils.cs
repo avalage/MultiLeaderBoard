@@ -27,7 +27,9 @@ namespace BeatLeader.Themes {
 
         public static Material GetAvatarMaterial(ThemeType themeType, ThemeTier themeTier,bool smallVersion) {
             if (themeType is ThemeType.Unknown || themeTier is ThemeTier.Unknown) return BundleLoader.DefaultAvatarMaterial;
+            if (BundleLoader.ThemesCollection == null) return BundleLoader.DefaultAvatarMaterial;
             if (!BundleLoader.ThemesCollection.TryGetThemeMaterials(themeType, out var themeMaterials)) return BundleLoader.DefaultAvatarMaterial;
+            if (themeMaterials == null) return BundleLoader.DefaultAvatarMaterial;
             return !themeMaterials.TryGetAvatarMaterial(themeTier, smallVersion, out var material) ? BundleLoader.DefaultAvatarMaterial : material;
         }
 

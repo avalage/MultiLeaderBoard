@@ -67,6 +67,8 @@ namespace BeatLeader {
 
         public const bool ScoreSubmissionsEnabled = true;
 
+        public const bool ScoreSubmissionsAutoDisabledByConflict = true;
+
         public const bool BeatLeaderScoreSubmissionEnabled = true;
 
         public const bool ScoreSaberScoreSubmissionEnabled = true;

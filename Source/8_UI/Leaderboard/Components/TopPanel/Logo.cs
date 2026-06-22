@@ -9,6 +9,7 @@ using JetBrains.Annotations;
 using UnityEngine;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
+using UploadReplayRequest = BeatLeader.APIV2.UploadReplayRequest;
 
 namespace BeatLeader.Components {
     internal class Logo : ReeUIComponentV2 {

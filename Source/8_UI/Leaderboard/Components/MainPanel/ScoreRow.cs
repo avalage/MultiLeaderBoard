@@ -1,6 +1,7 @@
 ﻿using BeatLeader.DataManager;
 using BeatLeader.Manager;
 using BeatLeader.Models;
+using BeatLeader.ViewControllers;
 using TMPro;
 
 namespace BeatLeader.Components {
@@ -59,19 +60,41 @@ namespace BeatLeader.Components {
         protected override void OnClick() {
             switch (ScoreRowContent) {
                 case Score playerScore: {
+                    if (TryPresentScoreInfoModal(playerScore)) {
+                        return;
+                    }
+
                     LeaderboardEvents.NotifyScoreInfoButtonWasPressed(playerScore);
                     break;
                 }
                 case ClanScore clanScore: {
+                    if (TryPresentClanScoreInfoModal(clanScore)) {
+                        return;
+                    }
+
                     LeaderboardEvents.NotifyClanScoreInfoButtonWasPressed(clanScore);
                     break;
                 }
                 case ClanPlayer clanPlayer: {
                     if (clanPlayer.score == null) return;
+                    if (TryPresentScoreInfoModal(clanPlayer.score)) {
+                        return;
+                    }
+
                     LeaderboardEvents.NotifyScoreInfoButtonWasPressed(clanPlayer.score);
                     break;
                 }
             }
+        }
+
+        private bool TryPresentScoreInfoModal(Score score) {
+            var views = GetComponentsInParent<LeaderboardView>(true);
+            return views.Length > 0 && views[0].TryPresentScoreInfoModal(score);
+        }
+
+        private bool TryPresentClanScoreInfoModal(ClanScore score) {
+            var views = GetComponentsInParent<LeaderboardView>(true);
+            return views.Length > 0 && views[0].TryPresentClanScoreInfoModal(score);
         }
 
         #endregion

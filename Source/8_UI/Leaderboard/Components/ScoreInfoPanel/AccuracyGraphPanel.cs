@@ -15,10 +15,21 @@ namespace BeatLeader.Components {
         #region Initialize
 
         private AccuracyGraph _accuracyGraph;
+        private bool _hasGraphData;
+
+        private bool IsGraphReady => _graphContainer != null && _accuracyGraph != null;
 
         protected override void OnInitialize() {
+            if (_graphContainer == null || BundleLoader.AccuracyGraphPrefab == null) {
+                return;
+            }
+
             var go = Object.Instantiate(BundleLoader.AccuracyGraphPrefab, _graphContainer, false);
             _accuracyGraph = go.GetComponent<AccuracyGraph>();
+            if (_accuracyGraph == null) {
+                return;
+            }
+
             _accuracyGraph.Construct(_graphBackground);
         }
 
@@ -31,11 +42,24 @@ namespace BeatLeader.Components {
         private Rect _viewRect = Rect.zero;
 
         public void SetScoreStats(ScoreStats scoreStats) {
-            _songDuration = scoreStats.winTracker.endTime;
-            _points = scoreStats.scoreGraphTracker.graph;
+            _hasGraphData = false;
+
+            var graph = scoreStats.scoreGraphTracker?.graph;
+            if (graph == null || graph.Length == 0) {
+                _points = Array.Empty<float>();
+                return;
+            }
+
+            _songDuration = Mathf.Max(1.0f, scoreStats.winTracker.endTime);
+            _points = graph;
+
+            if (!IsGraphReady) {
+                return;
+            }
 
             AccuracyGraphUtils.PostProcessPoints(_points, out var positions, out _viewRect);
             _accuracyGraph.Setup(positions, _viewRect, GetCanvasRadius(), _songDuration);
+            _hasGraphData = true;
         }
 
         #endregion
@@ -54,7 +78,8 @@ namespace BeatLeader.Components {
         }
 
         private void LateUpdate() {
-            if (!_graphContainer.gameObject.activeInHierarchy || !_cursorInitialized) return;
+            if (!IsGraphReady || !_hasGraphData || !_graphContainer.gameObject.activeInHierarchy || !_cursorInitialized) return;
+            if (_vrPointer == null) return;
 
             var cursorPosition3D = _vrPointer.cursorPosition;
             if (cursorPosition3D.Equals(_lastPosition3D)) return;
@@ -90,7 +115,7 @@ namespace BeatLeader.Components {
         }
 
         private void Update() {
-            if (!_graphContainer.gameObject.activeInHierarchy || float.IsNaN(_targetViewTime)) return;
+            if (!IsGraphReady || !_hasGraphData || !_graphContainer.gameObject.activeInHierarchy || float.IsNaN(_targetViewTime)) return;
             _currentViewTime = Mathf.Lerp(_currentViewTime, _targetViewTime, Time.deltaTime * 10.0f);
             var songTime = _currentViewTime * _songDuration;
             var accuracy = GetAccuracy(_currentViewTime);
@@ -129,6 +154,10 @@ namespace BeatLeader.Components {
         private readonly CurvedCanvasSettingsHelper _curvedCanvasSettingsHelper = new();
 
         private float GetCanvasRadius() {
+            if (_accuracyGraph == null || _accuracyGraph.Canvas == null) {
+                return float.MaxValue;
+            }
+
             var canvasSettings = _curvedCanvasSettingsHelper.GetCurvedCanvasSettings(_accuracyGraph.Canvas);
             return canvasSettings == null ? float.MaxValue : canvasSettings.radius;
         }

@@ -296,12 +296,7 @@ namespace BeatLeader.WebRequests {
         }
 
         private static string FormatFailReason(Exception ex) {
-            var baseException = ex.GetBaseException();
-            var message = string.IsNullOrWhiteSpace(baseException.Message)
-                ? baseException.GetType().Name
-                : $"{baseException.GetType().Name}: {baseException.Message}";
-
-            return message.Length <= 160 ? message : message.Substring(0, 157) + "...";
+            return WebRequestFailReasonFormatter.Format(ex);
         }
 
         private async Task Retry() {
