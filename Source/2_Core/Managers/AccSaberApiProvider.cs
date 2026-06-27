@@ -9,7 +9,7 @@ namespace BeatLeader {
         private const string ApiBaseUrl = "https://api.accsaberreloaded.com/v1";
         private const string OverallCategoryId = "b0000000-0000-0000-0000-000000000005";
         private static readonly TimeSpan ScoreCacheTtl = TimeSpan.FromMinutes(10);
-        private static readonly TimeSpan MissingScoreCacheTtl = TimeSpan.FromMinutes(3);
+        private static readonly TimeSpan MissingScoreCacheTtl = TimeSpan.FromSeconds(25);
         private static readonly TimeSpan ProfileCacheTtl = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan DifficultyCacheTtl = TimeSpan.FromMinutes(15);
         private static readonly Dictionary<string, AccSaberScoreCacheEntry> ScoreCache = new();

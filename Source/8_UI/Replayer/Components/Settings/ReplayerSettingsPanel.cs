@@ -39,7 +39,8 @@ namespace BeatLeader.UI.Replayer {
         }
 
         private void RefreshBackgroundBlur(bool useAlternative) {
-            _backgroundImage.Material = useAlternative ? BundleLoader.Materials.blurredBackgroundMaterial : GameResources.UIFogBackgroundMaterial;
+            _backgroundImage.Material = GameResources.UINoGlowMaterial;
+            _backgroundImage.Color = new Color(0.04f, 0.04f, 0.045f, 0.96f);
         }
 
         #endregion
@@ -81,6 +82,9 @@ namespace BeatLeader.UI.Replayer {
                             anchorMax = new Vector2(1f, 0f)
                         },
                         Children = {
+                            //pop-up with quick settings
+                            new QuickSettingsPanel().Bind(ref _quickSettingsPanel),
+
                             //actual view
                             new KeyedContainer<string> {
                                 Control = segmentedControl,
@@ -101,13 +105,11 @@ namespace BeatLeader.UI.Replayer {
                                         .AsFlexItem(size: 100.pct())
                                         .Bind(ref _otherView)
                                 }
-                            }.AsFlexItem(flexGrow: 1f, margin: 2f).AsFlexGroup().Bind(ref _selectorContainer),
-
-                            //pop-up with quick settings
-                            new QuickSettingsPanel().Bind(ref _quickSettingsPanel)
+                            }.AsFlexItem(flexGrow: 1f, margin: 2f).AsFlexGroup().Bind(ref _selectorContainer)
                         }
                     }.AsFlexItem(flex: 1f).AsBackground(
-                        sprite: BundleLoader.Sprites.backgroundRight,
+                        sprite: BundleLoader.BlackTransparentBG,
+                        color: new(0.04f, 0.04f, 0.045f, 0.96f),
                         pixelsPerUnit: 7f
                     ).AsFlexGroup(
                         direction: FlexDirection.Column,

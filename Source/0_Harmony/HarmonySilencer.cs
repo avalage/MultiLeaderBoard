@@ -12,7 +12,7 @@ namespace BeatLeader {
             silencersRegistry.Add(method, enable);
         }
 
-        private static readonly Harmony harmony = new("BeatLeader.SilencersRegistry");
+        private static readonly Harmony harmony = new("MultiLeaderboard.SilencersRegistry");
         private static readonly Dictionary<MethodInfo, bool> silencersRegistry = new();
 
         private static readonly HarmonyMethod silencerPrefix =

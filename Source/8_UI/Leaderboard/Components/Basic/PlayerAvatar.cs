@@ -4,6 +4,7 @@ using BeatSaberMarkupLanguage.Attributes;
 using HMUI;
 using JetBrains.Annotations;
 using System.Collections;
+using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
 using Vector3 = UnityEngine.Vector3;
@@ -26,9 +27,12 @@ namespace BeatLeader.Components {
         private Material? _baseMaterial;
         private Material? _materialInstance;
         private bool _materialSet;
+        private IPlayerProfileSettings? _profileSettings;
+        private static readonly HashSet<string> LoggedMaterialSelections = new();
 
         private void SelectMaterial(IPlayerProfileSettings? profileSettings) {
             ThemesUtils.GetAvatarParams(profileSettings, _useSmallMaterialVersion, out var baseMaterial, out _hueShift, out _saturation);
+            LogMaterialSelection(profileSettings, baseMaterial);
 
             if (!_materialSet || baseMaterial != _baseMaterial) {
                 _baseMaterial = baseMaterial;
@@ -37,7 +41,7 @@ namespace BeatLeader.Components {
                 _materialInstance = Instantiate(baseMaterial);
                 _image.material = _materialInstance;
                 _materialSet = true;
-                var scale = _materialInstance.GetFloat(ScalePropertyId);
+                var scale = _materialInstance.HasProperty(ScalePropertyId) ? _materialInstance.GetFloat(ScalePropertyId) : 1.0f;
                 _image.transform.localScale = new Vector3(scale, scale, scale);
             }
 
@@ -46,10 +50,58 @@ namespace BeatLeader.Components {
 
         private void UpdateMaterialProperties() {
             if (!_materialSet) return;
-            _materialInstance!.SetTexture(AvatarTexturePropertyId, _texture);
-            _materialInstance.SetFloat(FadeValuePropertyId, _fadeValue);
-            _materialInstance.SetFloat(HueShiftPropertyId, _hueShift);
-            _materialInstance.SetFloat(SaturationPropertyId, _saturation);
+            if (_materialInstance!.HasProperty(AvatarTexturePropertyId)) {
+                _materialInstance.SetTexture(AvatarTexturePropertyId, _texture);
+            }
+
+            if (_materialInstance.HasProperty(FadeValuePropertyId)) {
+                _materialInstance.SetFloat(FadeValuePropertyId, _fadeValue);
+            }
+
+            if (_materialInstance.HasProperty(HueShiftPropertyId)) {
+                _materialInstance.SetFloat(HueShiftPropertyId, _hueShift);
+            }
+
+            if (_materialInstance.HasProperty(SaturationPropertyId)) {
+                _materialInstance.SetFloat(SaturationPropertyId, _saturation);
+            }
+        }
+
+        private void LogMaterialSelection(IPlayerProfileSettings? profileSettings, Material baseMaterial) {
+            var profileKey = profileSettings == null
+                ? "profile=null"
+                : $"type={profileSettings.ThemeType},tier={profileSettings.ThemeTier},hue={profileSettings.EffectHue},sat={profileSettings.EffectSaturation}";
+            var rawEffectName = profileSettings is ProfileSettings profileSettingsModel
+                ? profileSettingsModel.effectName ?? "<null>"
+                : "<unknown>";
+            var materialName = baseMaterial != null ? baseMaterial.name : "null";
+            var shaderName = baseMaterial != null && baseMaterial.shader != null ? baseMaterial.shader.name : "null";
+            var isDefaultMaterial = baseMaterial == BundleLoader.DefaultAvatarMaterial;
+            var key = $"{profileKey}|effect={rawEffectName}|small={_useSmallMaterialVersion}|material={materialName}|shader={shaderName}|default={isDefaultMaterial}";
+            if (!LoggedMaterialSelections.Add(key)) {
+                return;
+            }
+
+            Plugin.Log.Info(
+                $"[PlayerAvatar] Material selected; {profileKey}; small={_useSmallMaterialVersion}; " +
+                $"effectName='{rawEffectName}'; material={materialName}; shader={shaderName}; isDefault={isDefaultMaterial}; " +
+                $"hasAvatarTexture={baseMaterial != null && baseMaterial.HasProperty(AvatarTexturePropertyId)}; " +
+                $"hasFade={baseMaterial != null && baseMaterial.HasProperty(FadeValuePropertyId)}; " +
+                $"hasHue={baseMaterial != null && baseMaterial.HasProperty(HueShiftPropertyId)}; " +
+                $"hasSaturation={baseMaterial != null && baseMaterial.HasProperty(SaturationPropertyId)}; " +
+                $"hasScale={baseMaterial != null && baseMaterial.HasProperty(ScalePropertyId)}"
+            );
+
+            if (profileSettings != null &&
+                profileSettings.ThemeType != ThemeType.Unknown &&
+                profileSettings.ThemeTier != ThemeTier.Unknown &&
+                isDefaultMaterial) {
+                Plugin.Log.Info(
+                    $"[PlayerAvatar] Original BeatLeader avatar frame material was not resolved; " +
+                    $"runtime fallback frame is disabled. type={profileSettings.ThemeType}, " +
+                    $"tier={profileSettings.ThemeTier}, small={_useSmallMaterialVersion}, effectName='{rawEffectName}'."
+                );
+            }
         }
 
         #endregion
@@ -72,7 +124,11 @@ namespace BeatLeader.Components {
         }
 
         public void Setup(bool useSmallMaterialVersion) {
+            if (_useSmallMaterialVersion == useSmallMaterialVersion) return;
             _useSmallMaterialVersion = useSmallMaterialVersion;
+            if (_materialSet) {
+                SelectMaterial(_profileSettings);
+            }
         }
 
         #endregion
@@ -92,6 +148,7 @@ namespace BeatLeader.Components {
         #region SetAvatar
 
         private string? _url = "";
+        private string? _profileSettingsKey = "";
         private CancellationTokenSource? tokenSource = null;
 
         public void SetLoading() {
@@ -105,10 +162,24 @@ namespace BeatLeader.Components {
         }
 
         public void SetAvatar(string? url, IPlayerProfileSettings? profileSettings) {
-            if (_url == url) return;
+            _profileSettings = profileSettings;
+            var profileSettingsKey = GetProfileSettingsKey(profileSettings);
+            if (_url == url && _profileSettingsKey == profileSettingsKey) return;
+            var urlChanged = _url != url;
             _url = url;
-            SelectMaterial(profileSettings);
-            UpdateAvatar();
+            _profileSettingsKey = profileSettingsKey;
+            SelectMaterial(_profileSettings);
+            if (urlChanged) {
+                UpdateAvatar();
+            } else {
+                UpdateMaterialProperties();
+            }
+        }
+
+        private static string? GetProfileSettingsKey(IPlayerProfileSettings? profileSettings) {
+            return profileSettings == null
+                ? null
+                : $"{profileSettings.ThemeType}|{profileSettings.ThemeTier}|{profileSettings.EffectHue}|{profileSettings.EffectSaturation}";
         }
 
         private void UpdateAvatar() {

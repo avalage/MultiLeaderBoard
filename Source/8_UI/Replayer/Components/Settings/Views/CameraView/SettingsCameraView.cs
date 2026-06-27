@@ -113,7 +113,7 @@ namespace BeatLeader.UI.Replayer {
         }
 
         protected override GameObject Construct() {
-            return new Layout {
+            return new Background {
                 Children = {
                     new Label {
                         Text = "Camera controls are not available while using an external camera",
@@ -148,8 +148,14 @@ namespace BeatLeader.UI.Replayer {
                 }
             }.AsFlexGroup(
                 direction: FlexDirection.Column,
-                gap: 2f
-            ).Bind(ref _container).Use();
+                gap: 2f,
+                padding: 2f
+            ).With(x => {
+                x.Sprite = BundleLoader.BlackTransparentBG;
+                x.Material = GameResources.UINoGlowMaterial;
+                x.Color = new Color(0.055f, 0.055f, 0.06f, 0.96f);
+                x.PixelsPerUnit = 7f;
+            }).Bind(ref _container).Use();
         }
 
         #endregion

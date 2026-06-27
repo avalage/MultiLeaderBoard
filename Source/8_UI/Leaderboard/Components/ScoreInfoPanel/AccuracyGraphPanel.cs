@@ -1,36 +1,116 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using BeatLeader.Models;
-using BeatLeader.UI;
 using BeatSaberMarkupLanguage.Attributes;
 using HMUI;
 using JetBrains.Annotations;
 using UnityEngine;
 using VRUIControls;
 using Object = UnityEngine.Object;
-using Vector3 = UnityEngine.Vector3;
 
 namespace BeatLeader.Components {
     internal class AccuracyGraphPanel : ReeUIComponentV2 {
         #region Initialize
 
-        private AccuracyGraph _accuracyGraph;
+        private Component _accuracyGraphComponent;
+        private MethodInfo _accuracyGraphConstructMethod;
+        private MethodInfo _accuracyGraphSetupMethod;
+        private MethodInfo _accuracyGraphSetCursorMethod;
+        private PropertyInfo _accuracyGraphCanvasProperty;
         private bool _hasGraphData;
 
-        private bool IsGraphReady => _graphContainer != null && _accuracyGraph != null;
+        private bool IsGraphReady => _graphContainer != null &&
+            _accuracyGraphComponent != null &&
+            _accuracyGraphSetupMethod != null &&
+            _accuracyGraphSetCursorMethod != null;
 
         protected override void OnInitialize() {
-            if (_graphContainer == null || BundleLoader.AccuracyGraphPrefab == null) {
+            if (_graphContainer == null) {
+                Plugin.Log.Info("[AccuracyGraph] Graph container is null; cannot initialize accuracy graph.");
+                return;
+            }
+
+            if (BundleLoader.AccuracyGraphPrefab == null) {
+                Plugin.Log.Info("[AccuracyGraph] BundleLoader.AccuracyGraphPrefab is null; original BeatLeader graph cannot be created.");
                 return;
             }
 
             var go = Object.Instantiate(BundleLoader.AccuracyGraphPrefab, _graphContainer, false);
-            _accuracyGraph = go.GetComponent<AccuracyGraph>();
-            if (_accuracyGraph == null) {
+            if (go == null) {
+                Plugin.Log.Info("[AccuracyGraph] AccuracyGraph prefab instantiation returned null.");
                 return;
             }
 
-            _accuracyGraph.Construct(_graphBackground);
+            _accuracyGraphComponent = FindAccuracyGraphComponent(go);
+            if (_accuracyGraphComponent == null) {
+                LogPrefabComponents(go, "AccuracyGraph component is missing");
+                return;
+            }
+
+            var graphType = _accuracyGraphComponent.GetType();
+            _accuracyGraphConstructMethod = graphType.GetMethod("Construct", BindingFlags.Instance | BindingFlags.Public);
+            _accuracyGraphSetupMethod = graphType.GetMethod("Setup", BindingFlags.Instance | BindingFlags.Public);
+            _accuracyGraphSetCursorMethod = graphType.GetMethod("SetCursor", BindingFlags.Instance | BindingFlags.Public);
+            _accuracyGraphCanvasProperty = graphType.GetProperty("Canvas", BindingFlags.Instance | BindingFlags.Public);
+
+            if (_accuracyGraphSetupMethod == null || _accuracyGraphSetCursorMethod == null) {
+                Plugin.Log.Info(
+                    $"[AccuracyGraph] Original component type '{graphType.FullName}' from '{graphType.Assembly.GetName().Name}' " +
+                    $"does not expose required Setup/SetCursor methods."
+                );
+                _accuracyGraphComponent = null;
+                return;
+            }
+
+            if (_accuracyGraphConstructMethod != null) {
+                try {
+                    _accuracyGraphConstructMethod.Invoke(_accuracyGraphComponent, new object[] { _graphBackground });
+                } catch (Exception exception) {
+                    Plugin.Log.Info($"[AccuracyGraph] Construct invocation failed: {exception.GetBaseException().Message}");
+                }
+            } else {
+                Plugin.Log.Info(
+                    $"[AccuracyGraph] Original component type '{graphType.FullName}' has no Construct method; background material may be missing."
+                );
+            }
+
+            var canvas = GetAccuracyGraphCanvas();
+            Plugin.Log.Info(
+                $"[AccuracyGraph] Original prefab initialized through component '{graphType.FullName}' from '{graphType.Assembly.GetName().Name}'; " +
+                $"prefab='{BundleLoader.AccuracyGraphPrefab.name}', " +
+                $"background={(_graphBackground != null ? _graphBackground.name : "<null>")}, " +
+                $"canvas={(canvas != null ? canvas.name : "<null>")}."
+            );
+        }
+
+        private static Component FindAccuracyGraphComponent(GameObject graphObject) {
+            var components = graphObject.GetComponents<Component>();
+            return components.FirstOrDefault(component => {
+                if (component == null) {
+                    return false;
+                }
+
+                var type = component.GetType();
+                return type.Name == "AccuracyGraph" && type.FullName == "BeatLeader.AccuracyGraph";
+            });
+        }
+
+        private static void LogPrefabComponents(GameObject graphObject, string reason) {
+            var components = graphObject.GetComponents<Component>()
+                .Select(component => {
+                    if (component == null) {
+                        return "<missing>";
+                    }
+
+                    var type = component.GetType();
+                    return $"{type.FullName} [{type.Assembly.GetName().Name}]";
+                })
+                .ToArray();
+
+            Plugin.Log.Info(
+                $"[AccuracyGraph] {reason} on prefab '{graphObject.name}'. Components: {string.Join(", ", components)}"
+            );
         }
 
         #endregion
@@ -47,19 +127,30 @@ namespace BeatLeader.Components {
             var graph = scoreStats.scoreGraphTracker?.graph;
             if (graph == null || graph.Length == 0) {
                 _points = Array.Empty<float>();
+                Plugin.Log.Info("[AccuracyGraph] ScoreStats has no scoreGraphTracker graph; graph panel will stay empty.");
+                return;
+            }
+            if (!IsGraphReady) {
+                Plugin.Log.Info("[AccuracyGraph] SetScoreStats skipped because original graph prefab is not ready.");
                 return;
             }
 
             _songDuration = Mathf.Max(1.0f, scoreStats.winTracker.endTime);
             _points = graph;
 
-            if (!IsGraphReady) {
+            AccuracyGraphUtils.PostProcessPoints(_points, out var positions, out _viewRect);
+            try {
+                _accuracyGraphSetupMethod.Invoke(_accuracyGraphComponent, new object[] { positions, _viewRect, GetCanvasRadius(), _songDuration });
+            } catch (Exception exception) {
+                Plugin.Log.Info($"[AccuracyGraph] Setup invocation failed: {exception.GetBaseException().Message}");
                 return;
             }
 
-            AccuracyGraphUtils.PostProcessPoints(_points, out var positions, out _viewRect);
-            _accuracyGraph.Setup(positions, _viewRect, GetCanvasRadius(), _songDuration);
             _hasGraphData = true;
+            Plugin.Log.Info(
+                $"[AccuracyGraph] Setup complete; rawPoints={_points.Length}, positions={positions.Count}, " +
+                $"viewRect=({_viewRect.xMin:F3},{_viewRect.yMin:F3},{_viewRect.xMax:F3},{_viewRect.yMax:F3}), duration={_songDuration:F2}."
+            );
         }
 
         #endregion
@@ -119,15 +210,21 @@ namespace BeatLeader.Components {
             _currentViewTime = Mathf.Lerp(_currentViewTime, _targetViewTime, Time.deltaTime * 10.0f);
             var songTime = _currentViewTime * _songDuration;
             var accuracy = GetAccuracy(_currentViewTime);
-            _accuracyGraph.SetCursor(_currentViewTime);
+            try {
+                _accuracyGraphSetCursorMethod.Invoke(_accuracyGraphComponent, new object[] { _currentViewTime });
+            } catch (Exception exception) {
+                Plugin.Log.Info($"[AccuracyGraph] SetCursor invocation failed; cursor updates disabled: {exception.GetBaseException().Message}");
+                _accuracyGraphSetCursorMethod = null;
+                return;
+            }
+
             CursorText = FormatCursorText(songTime, accuracy);
         }
 
         private static string FormatCursorText(float songTime, float accuracy) {
             var fullMinutes = Mathf.FloorToInt(songTime / 60.0f);
             var remainingSeconds = Mathf.FloorToInt(Mathf.Abs(songTime % 60.0f));
-            var accent = BeatLeaderDarkGoldTheme.AccentYellowHtml;
-            return $"<color={accent}><bll>ls-song-time</bll>: </color>{fullMinutes}:{remainingSeconds:00}  <color={accent}><bll>ls-accuracy</bll>: </color>{accuracy * 100.0f:F2}<size=70%>%";
+            return $"<color=#FFB000><bll>ls-song-time</bll>: </color>{fullMinutes}:{remainingSeconds:00}  <color=#FFB000><bll>ls-accuracy</bll>: </color>{accuracy * 100.0f:F2}<size=70%>%";
         }
 
         private float GetAccuracy(float viewTime) {
@@ -154,12 +251,27 @@ namespace BeatLeader.Components {
         private readonly CurvedCanvasSettingsHelper _curvedCanvasSettingsHelper = new();
 
         private float GetCanvasRadius() {
-            if (_accuracyGraph == null || _accuracyGraph.Canvas == null) {
+            var canvas = GetAccuracyGraphCanvas();
+            if (canvas == null) {
+                Plugin.Log.Info("[AccuracyGraph] Canvas is null while calculating graph radius; using flat fallback radius.");
                 return float.MaxValue;
             }
 
-            var canvasSettings = _curvedCanvasSettingsHelper.GetCurvedCanvasSettings(_accuracyGraph.Canvas);
+            var canvasSettings = _curvedCanvasSettingsHelper.GetCurvedCanvasSettings(canvas);
             return canvasSettings == null ? float.MaxValue : canvasSettings.radius;
+        }
+
+        private Canvas GetAccuracyGraphCanvas() {
+            if (_accuracyGraphComponent == null || _accuracyGraphCanvasProperty == null) {
+                return null;
+            }
+
+            try {
+                return _accuracyGraphCanvasProperty.GetValue(_accuracyGraphComponent) as Canvas;
+            } catch (Exception exception) {
+                Plugin.Log.Info($"[AccuracyGraph] Canvas property read failed: {exception.GetBaseException().Message}");
+                return null;
+            }
         }
 
         #endregion

@@ -46,7 +46,8 @@ namespace BeatLeader {
 
         public static LeaderboardDisplaySettings LeaderboardDisplaySettings = new() {
             ClanCaptureDisplay = true,
-            RankedStarsDisplayMode = RankedStarsDisplayMode.Both
+            RankedStarsDisplayMode = RankedStarsDisplayMode.Both,
+            AccSaberProfileStatsDisplay = true
         };
 
         #endregion

@@ -77,7 +77,12 @@ namespace BeatLeader.UI.Hub {
 
             protected override void OnDestroy() {
                 if (_theme != null) {
-                    _theme.SearchThemeUpdatedEvent += HandleThemeUpdated;
+                    _theme.SearchThemeUpdatedEvent -= HandleThemeUpdated;
+                }
+
+                if (_prevItem != null) {
+                    _prevItem.ReplayMetadata.TagAddedEvent -= HandleTagAddedOrRemoved;
+                    _prevItem.ReplayMetadata.TagRemovedEvent -= HandleTagAddedOrRemoved;
                 }
             }
 
@@ -180,7 +185,7 @@ namespace BeatLeader.UI.Hub {
                 var delta = tags.Count - _spawnedTags.Count;
                 switch (delta) {
                     case < 0: {
-                        for (var i = -delta - 1; i >= 0; i--) {
+                        for (var i = _spawnedTags.Count - 1; i >= tags.Count; i--) {
                             var tag = _spawnedTags[i];
                             _replaysList!._tagsPool.Despawn(tag);
                             _spawnedTags.RemoveAt(i);

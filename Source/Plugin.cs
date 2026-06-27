@@ -52,6 +52,7 @@ namespace BeatLeader {
             OnEnabledChanged(PluginConfig.Enabled);
             ScoreSubmissionManager.RefreshInstalledMods();
             API.UploadReplayRequest.InitializeCompatibility();
+            VRControllerCompatibilityPatches.ApplyRuntimePatches();
             GuildSaberCompatibilityPatches.ApplyRuntimePatches();
             MainMenuAwaiter.MainMenuInitializing += MainMenuInit;
             InteropLoader.Init();

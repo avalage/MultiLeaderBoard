@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using BeatSaberMarkupLanguage.TypeHandlers;
 using BeatSaberMarkupLanguage.Tags;
 using BeatSaberMarkupLanguage;
@@ -52,13 +53,30 @@ namespace BeatLeader.UI.BSML_Addons {
 
         public static void LoadAddons() {
             if (!_ready) {
-            foreach (var sprite in spritesToCache)
-                BSMLUtility
-                    .AddSpriteToBSMLCache("bl-" + sprite.Key, sprite.Value);
+                foreach (var sprite in spritesToCache) {
+                    BSMLUtility.AddSpriteToBSMLCache("bl-" + sprite.Key, sprite.Value);
+                }
             }
-            foreach (var tag in addonTags) BSMLParser.Instance.RegisterTag(tag);
-            foreach (var handler in addonHandlers) BSMLParser.Instance.RegisterTypeHandler(handler);
+
+            foreach (var tag in addonTags) TryRegisterTag(tag);
+            foreach (var handler in addonHandlers) TryRegisterTypeHandler(handler);
             _ready = true;
+        }
+
+        private static void TryRegisterTag(BSMLTag tag) {
+            try {
+                BSMLParser.Instance.RegisterTag(tag);
+            } catch (ArgumentException ex) {
+                Plugin.Log.Debug($"[BSMLAddons] Skipping duplicate tag {tag.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        private static void TryRegisterTypeHandler(TypeHandler handler) {
+            try {
+                BSMLParser.Instance.RegisterTypeHandler(handler);
+            } catch (ArgumentException ex) {
+                Plugin.Log.Debug($"[BSMLAddons] Skipping duplicate type handler {handler.GetType().Name}: {ex.Message}");
+            }
         }
     }
 }

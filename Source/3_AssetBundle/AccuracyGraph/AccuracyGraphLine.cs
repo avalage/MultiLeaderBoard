@@ -1,8 +1,10 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 using UnityEngine.UI;
 
 namespace BeatLeader {
+    [MovedFrom(true, "BeatLeader", "BeatLeader", null)]
     public class AccuracyGraphLine : Graphic {
         #region Serialized
 
@@ -17,7 +19,7 @@ namespace BeatLeader {
 
         protected override void Start() {
             base.Start();
-            _graphMeshHelper = new GraphMeshHelper(resolution, 1, thickness);
+            EnsureGraphMeshHelper();
         }
 
         #endregion
@@ -25,6 +27,8 @@ namespace BeatLeader {
         #region OnPopulateMesh
 
         protected override void OnPopulateMesh(VertexHelper vh) {
+            EnsureGraphMeshHelper();
+
             var screenRect = RectTransformUtility.PixelAdjustRect(rectTransform, canvas);
             var screenViewTransform = new ScreenViewTransform(screenRect, _viewRect);
 
@@ -48,6 +52,14 @@ namespace BeatLeader {
             _canvasRadius = canvasRadius;
 
             SetVerticesDirty();
+        }
+
+        #endregion
+
+        #region Mesh Helper
+
+        private void EnsureGraphMeshHelper() {
+            _graphMeshHelper ??= new GraphMeshHelper(resolution, 1, thickness);
         }
 
         #endregion

@@ -1,4 +1,4 @@
-﻿using BeatLeader.Utils;
+using BeatLeader.Utils;
 using BeatSaber.GameSettings;
 using IPA.Utilities;
 using UnityEngine;
@@ -9,7 +9,7 @@ namespace BeatLeader.Replayer {
     public class MenuControllersManager : MonoBehaviour {
         [Inject] private readonly ReplayerExtraObjectsProvider _extraObjects = null!;
         [Inject] private readonly PauseMenuManager _pauseMenuManager = null!;
-        [Inject] private readonly DiContainer _diContainer = null!; 
+        [Inject] private readonly DiContainer _diContainer = null!;
         [Inject] private readonly VRInputModule _vrInputModule = null!;
         [Inject] private readonly SettingsManager _settingsManager = null!;
         [Inject] private readonly ControllerProfilesModel _controllersProfile = null!;
@@ -46,14 +46,27 @@ namespace BeatLeader.Replayer {
 
             LeftHand.transform.SetParent(HandsContainer, false);
             RightHand.transform.SetParent(HandsContainer, false);
-            SetInputControllers(LeftHand, RightHand);
+            TrySetInputControllers(LeftHand, RightHand);
             ShowHands(!InputUtils.UsesFPFC);
         }
 
-        private void SetInputControllers(VRController left, VRController right) {
+        private void TrySetInputControllers(VRController left, VRController right) {
+            if (!CanUseAsInputController(left) || !CanUseAsInputController(right)) {
+                Plugin.Log.Info("[ReplayerInput] Keeping original VRInputModule controllers; replay hand clones do not expose a safe thumbstick on this setup.");
+                return;
+            }
+
             var pointer = _vrInputModule.GetField<VRPointer, VRInputModule>("_vrPointer");
             pointer.SetField("_leftVRController", left);
             pointer.SetField("_rightVRController", right);
+        }
+
+        private static bool CanUseAsInputController(VRController controller) {
+            try {
+                return controller != null && controller.thumbstick != null;
+            } catch {
+                return false;
+            }
         }
     }
 }

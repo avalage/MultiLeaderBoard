@@ -10,7 +10,7 @@ using Image = Reactive.BeatSaber.Components.Image;
 
 namespace BeatLeader.UI.Replayer {
     internal class QuickSettingsPanel : ReactiveComponent {
-        private const float Height = 10f;
+        private const float Height = 12f;
 
         private SpeedSlider _speedSlider = null!;
         private AnimatedValue<float> _contentAnim = null!;
@@ -51,8 +51,9 @@ namespace BeatLeader.UI.Replayer {
                 direction: FlexDirection.Column,
                 justifyContent: Justify.FlexStart
             ).AsBackground(
-                color: new(0.15f, 0.15f, 0.15f, 1f),
-                sprite: BundleLoader.Sprites.backgroundRightBottom,
+                color: new(0.07f, 0.07f, 0.075f, 0.98f),
+                sprite: BundleLoader.BlackTransparentBG,
+                material: GameResources.UINoGlowMaterial,
                 pixelsPerUnit: 7f
             ).Animate(
                 _contentAnim,

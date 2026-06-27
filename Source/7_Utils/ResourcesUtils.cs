@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Reflection;
 
 namespace BeatLeader {
@@ -9,11 +10,26 @@ namespace BeatLeader {
         }
         
         public static Stream GetEmbeddedResourceStream(string resourceName) {
-            return Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
+            var assembly = typeof(Plugin).Assembly;
+            var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream != null) {
+                return stream;
+            }
+
+            var similarResources = assembly
+                .GetManifestResourceNames()
+                .Where(name => name.Contains("Resources") || name.Contains("_9_Resources"))
+                .Take(25);
+
+            throw new FileNotFoundException(
+                $"Embedded resource '{resourceName}' was not found in assembly '{assembly.GetName().Name}'. " +
+                $"Available resource samples: {string.Join(", ", similarResources)}",
+                resourceName
+            );
         }
 
         public static string[] GetEmbeddedResourceNames() {
-            return Assembly.GetExecutingAssembly().GetManifestResourceNames();
+            return typeof(Plugin).Assembly.GetManifestResourceNames();
         }
     }
 }

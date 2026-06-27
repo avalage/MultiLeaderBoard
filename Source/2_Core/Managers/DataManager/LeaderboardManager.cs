@@ -22,8 +22,15 @@ namespace BeatLeader.DataManager {
         private int _selectedScoreContext;
         private int _lastSelectedPage = 1;
         private BeatmapKey _lastSelectedBeatmap;
+        private string? _lastUserRequestScoresRefreshKey;
+        private float _lastUserRequestScoresRefreshTime;
+        private string? _lastUploadScoresRefreshKey;
+        private float _lastUploadScoresRefreshTime;
+        private int _refreshRequestCounter;
         private string Scope => _selectedScoreScope.ToString().ToLowerInvariant();
         private string Context => ScoresContexts.ContextForId(_selectedScoreContext).Key;
+        private const float UserRequestScoresRefreshCooldownSeconds = 45.0f;
+        private const float UploadScoresRefreshCooldownSeconds = 12.0f;
 
         #endregion
 
@@ -95,14 +102,22 @@ namespace BeatLeader.DataManager {
 
         private bool _updateRequired;
 
-        private void TryUpdateScores() {
+        private void TryUpdateScores(string reason) {
             _updateRequired = true;
-            if (!LeaderboardState.IsVisible) return;
-            UpdateScores();
+            var requestId = ++_refreshRequestCounter;
+            Plugin.Log.Info($"[LeaderboardRefresh] Requested #{requestId}; reason={reason}; visible={LeaderboardState.IsVisible}; {BuildRefreshDebugString()}");
+
+            if (!LeaderboardState.IsVisible) {
+                Plugin.Log.Info($"[LeaderboardRefresh] Deferred #{requestId}; leaderboard is hidden.");
+                return;
+            }
+
+            UpdateScores(reason, requestId);
         }
 
-        private void UpdateScores() {
+        private void UpdateScores(string reason, int requestId) {
             _updateRequired = false;
+            Plugin.Log.Info($"[LeaderboardRefresh] Executing #{requestId}; reason={reason}; {BuildRefreshDebugString()}");
 
             switch (LeaderboardState.leaderboardType) {
                 case LeaderboardType.SongDiffPlayerScores: {
@@ -123,7 +138,17 @@ namespace BeatLeader.DataManager {
             var scope = Scope;
             var page = _lastSelectedPage;
             var userId = await GetScoresUserId();
-            if (string.IsNullOrEmpty(userId) || !beatmap.Equals(_lastSelectedBeatmap)) return;
+            if (string.IsNullOrEmpty(userId)) {
+                Plugin.Log.Info($"[LeaderboardRefresh] Player scores request skipped; user id is empty; {BuildRefreshDebugString()}");
+                return;
+            }
+
+            if (!beatmap.Equals(_lastSelectedBeatmap)) {
+                Plugin.Log.Info($"[LeaderboardRefresh] Player scores request skipped; selected beatmap changed before send; {BuildRefreshDebugString()}");
+                return;
+            }
+
+            Plugin.Log.Info($"[LeaderboardRefresh] Sending player scores request; user={userId}; context={context}; scope={scope}; page={page}; {BuildRefreshDebugString()}");
             ScoresRequest.SendPage(beatmap, userId, context, scope, page);
         }
 
@@ -133,10 +158,12 @@ namespace BeatLeader.DataManager {
             var scope = Scope;
             var userId = await GetScoresUserId();
             if (string.IsNullOrEmpty(userId) || !beatmap.Equals(_lastSelectedBeatmap)) return;
+            Plugin.Log.Info($"[LeaderboardRefresh] Sending around-me scores request; user={userId}; context={context}; scope={scope}; {BuildRefreshDebugString()}");
             ScoresRequest.SendSeek(beatmap, userId, context, scope);
         }
 
         private void LoadClanScores() {
+            Plugin.Log.Info($"[LeaderboardRefresh] Sending clan scores request; {BuildRefreshDebugString()}");
             ClanScoresRequest.Send(_lastSelectedBeatmap, _lastSelectedPage);
         }
 
@@ -167,30 +194,64 @@ namespace BeatLeader.DataManager {
         private void OnUploadRequestStateChanged(IWebRequest<ScoreUploadResponse> instance, WebRequests.RequestState state, string? failReason) {
             if (!_lastSelectedBeatmap.IsValid()) return;
 
+            var selectedKey = LeaderboardKey.FromBeatmap(_lastSelectedBeatmap);
+            var status = instance.Result?.Status.ToString() ?? "null";
+            Plugin.Log.Info($"[LeaderboardRefresh] Upload state={state}; status={status}; failReason={failReason ?? "none"}; selected={BuildLeaderboardKeyDebugString(selectedKey)}; upload={BuildLeaderboardKeyDebugString(_uploadLeaderboardKey)}");
+
             switch (state) {
                 case WebRequests.RequestState.Started:
-                    _uploadLeaderboardKey = LeaderboardKey.FromBeatmap(_lastSelectedBeatmap);
+                    _uploadLeaderboardKey = selectedKey;
                     break;
                 case WebRequests.RequestState.Finished:
-                    if (!_uploadLeaderboardKey.Equals(LeaderboardKey.FromBeatmap(_lastSelectedBeatmap))) return;
-                    TryUpdateScores();
+                    if (!_uploadLeaderboardKey.Equals(selectedKey)) {
+                        Plugin.Log.Info("[LeaderboardRefresh] Upload-finished refresh skipped; selected beatmap is different from upload beatmap.");
+                        return;
+                    }
+
+                    var refreshKey = $"{BuildRefreshDebugString()}|uploadStatus={status}";
+                    if (_lastUploadScoresRefreshKey == refreshKey &&
+                        Time.realtimeSinceStartup - _lastUploadScoresRefreshTime < UploadScoresRefreshCooldownSeconds) {
+                        Plugin.Log.Info($"[LeaderboardRefresh] Upload-finished refresh skipped by cooldown; key={refreshKey}");
+                        return;
+                    }
+
+                    _lastUploadScoresRefreshKey = refreshKey;
+                    _lastUploadScoresRefreshTime = Time.realtimeSinceStartup;
+                    TryUpdateScores($"upload finished status={status}");
                     break;
             }
         }
 
         private void OnScoresRequestStateChanged(IWebRequest<ScoresTableContent> instance, WebRequests.RequestState state, string? failReason) {
+            Plugin.Log.Info($"[LeaderboardRefresh] ScoresRequest state={state}; failReason={failReason ?? "none"}; resultPage={instance.Result?.CurrentPage.ToString() ?? "null"}; resultRows={instance.Result?.MainRowContents.Count.ToString() ?? "null"}; {BuildRefreshDebugString()}");
             if (state is not WebRequests.RequestState.Finished || LeaderboardState.leaderboardType is not LeaderboardType.SongDiffPlayerScores) return;
             _lastSelectedPage = instance.Result?.CurrentPage ?? 1;
         }
 
         private void OnUserRequestStateChanged(IWebRequest<Player> instance, WebRequests.RequestState state, string? failReason) {
             if (state is not WebRequests.RequestState.Finished) return;
-            TryUpdateScores();
+            if (!_lastSelectedBeatmap.IsValid()) return;
+
+            var refreshKey = BuildUserRequestScoresRefreshKey();
+            if (_lastUserRequestScoresRefreshKey == refreshKey &&
+                Time.realtimeSinceStartup - _lastUserRequestScoresRefreshTime < UserRequestScoresRefreshCooldownSeconds) {
+                Plugin.Log.Info($"[LeaderboardRefresh] Skipping duplicate profile-update refresh: {refreshKey}");
+                return;
+            }
+
+            _lastUserRequestScoresRefreshKey = refreshKey;
+            _lastUserRequestScoresRefreshTime = Time.realtimeSinceStartup;
+            TryUpdateScores("profile/user request finished");
+        }
+
+        private string BuildUserRequestScoresRefreshKey() {
+            var leaderboardKey = LeaderboardKey.FromBeatmap(_lastSelectedBeatmap);
+            return $"{LeaderboardState.leaderboardType}|{leaderboardKey.Hash}|{leaderboardKey.Diff}|{leaderboardKey.Mode}|{Context}|{Scope}|{_lastSelectedPage}";
         }
 
         private void OnFriendsUpdated() {
             if (_selectedScoreScope is not ScoresScope.Friends) return;
-            TryUpdateScores();
+            TryUpdateScores("friends updated while friends scope is selected");
         }
 
         private void OnCacheUpdated() {
@@ -198,7 +259,7 @@ namespace BeatLeader.DataManager {
             if (!LeaderboardsCache.TryGetLeaderboardInfo(LeaderboardState.SelectedLeaderboardKey, out var cacheEntry)) return;
             if (FormatUtils.GetRankedStatus(cacheEntry.DifficultyInfo) is RankedStatus.Ranked) return;
             LeaderboardState.leaderboardType = LeaderboardType.SongDiffPlayerScores;
-            TryUpdateScores();
+            TryUpdateScores("leaderboards cache updated and clan leaderboard is not ranked");
         }
 
         #endregion
@@ -207,7 +268,7 @@ namespace BeatLeader.DataManager {
 
         private void OnIsVisibleChanged(bool isVisible) {
             if (!isVisible || !_updateRequired) return;
-            UpdateScores();
+            UpdateScores("leaderboard became visible with pending update", ++_refreshRequestCounter);
         }
 
         public void OnLeaderboardSet(BeatmapKey beatmapKey) {
@@ -218,7 +279,7 @@ namespace BeatLeader.DataManager {
             _lastSelectedBeatmap = beatmapKey;
             _lastSelectedPage = 1;
 
-            TryUpdateScores();
+            TryUpdateScores("leaderboard set");
 
             LeaderboardState.SelectedBeatmapLevel = level;
             LeaderboardState.SelectedBeatmapKey = beatmapKey;
@@ -232,7 +293,7 @@ namespace BeatLeader.DataManager {
                 _selectedScoreScope = scope;
                 _lastSelectedPage = 1;
 
-                TryUpdateScores();
+                TryUpdateScores($"score scope changed to {scope}");
             }
         }
 
@@ -244,7 +305,7 @@ namespace BeatLeader.DataManager {
                 _selectedScoreContext = context;
                 _lastSelectedPage = 1;
 
-                TryUpdateScores();
+                TryUpdateScores($"score context changed to {context}");
             }
         }
 
@@ -255,12 +316,12 @@ namespace BeatLeader.DataManager {
             }
 
             _lastSelectedPage--;
-            TryUpdateScores();
+            TryUpdateScores("previous page pressed");
         }
 
         private void OnNextPageClick() {
             _lastSelectedPage++;
-            TryUpdateScores();
+            TryUpdateScores("next page pressed");
         }
 
         private void OnAroundMeClick() {
@@ -273,7 +334,19 @@ namespace BeatLeader.DataManager {
                 _ => LeaderboardType.SongDiffPlayerScores
             };
             _lastSelectedPage = 1;
-            TryUpdateScores();
+            TryUpdateScores("captor clan toggle pressed");
+        }
+
+        private string BuildRefreshDebugString() {
+            if (!_lastSelectedBeatmap.IsValid()) {
+                return $"type={LeaderboardState.leaderboardType}; beatmap=invalid; context={Context}; scope={Scope}; page={_lastSelectedPage}";
+            }
+
+            return $"type={LeaderboardState.leaderboardType}; selected={BuildLeaderboardKeyDebugString(LeaderboardKey.FromBeatmap(_lastSelectedBeatmap))}; context={Context}; scope={Scope}; page={_lastSelectedPage}";
+        }
+
+        private static string BuildLeaderboardKeyDebugString(LeaderboardKey leaderboardKey) {
+            return $"hash={leaderboardKey.Hash}, diff={leaderboardKey.Diff}, mode={leaderboardKey.Mode}";
         }
 
         #endregion

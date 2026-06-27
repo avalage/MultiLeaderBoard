@@ -46,7 +46,7 @@ namespace BeatLeader.UI.Replayer {
         private Layout? _royaleView;
 
         protected override GameObject Construct() {
-            return new Layout {
+            return new Background {
                 Children = {
                     new TextSegmentedControl<int> {
                             Items = {
@@ -84,7 +84,16 @@ namespace BeatLeader.UI.Replayer {
                         }
                     }.AsFlexGroup(gap: 1f).AsFlexItem(flexGrow: 1f)
                 }
-            }.AsFlexGroup(direction: FlexDirection.Column, gap: 1f).Use();
+            }.AsFlexGroup(
+                direction: FlexDirection.Column,
+                gap: 1f,
+                padding: 2f
+            ).With(x => {
+                x.Sprite = BundleLoader.BlackTransparentBG;
+                x.Material = GameResources.UINoGlowMaterial;
+                x.Color = new Color(0.055f, 0.055f, 0.06f, 0.96f);
+                x.PixelsPerUnit = 7f;
+            }).Use();
         }
 
         protected override void OnInitialize() {

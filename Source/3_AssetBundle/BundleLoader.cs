@@ -150,6 +150,39 @@ namespace BeatLeader {
             ThemesCollection = assetBundle.LoadAsset<ThemesCollection>("ThemesCollection");
             SaberPrefab = assetBundle.LoadAsset<GameObject>("SaberPrefab");
             HeadPrefab = assetBundle.LoadAsset<GameObject>("HeadPrefab");
+            Plugin.Log.Info($"[BundleLoader] ThemesCollection loaded: {ThemesCollection != null}");
+            LogThemesCollectionState();
+        }
+
+        private static void LogThemesCollectionState() {
+            if (ThemesCollection == null) {
+                return;
+            }
+
+            LogThemeMaterialsState("Booster", ThemesCollection.booster);
+            LogThemeMaterialsState("TheSun", ThemesCollection.theSun);
+            LogThemeMaterialsState("TheMoon", ThemesCollection.theMoon);
+            LogThemeMaterialsState("TheStar", ThemesCollection.theStar);
+            LogThemeMaterialsState("Sparks", ThemesCollection.sparks);
+            LogThemeMaterialsState("Special", ThemesCollection.special);
+        }
+
+        private static void LogThemeMaterialsState(string name, ThemeMaterials materials) {
+            if (materials == null) {
+                Plugin.Log.Info($"[AvatarFrame] ThemeMaterials '{name}' is null.");
+                return;
+            }
+
+            Plugin.Log.Info(
+                $"[AvatarFrame] ThemeMaterials '{name}': " +
+                $"t1Small={MaterialName(materials.tier1AvatarSmall)}, t1Full={MaterialName(materials.tier1AvatarFull)}, " +
+                $"t2Small={MaterialName(materials.tier2AvatarSmall)}, t2Full={MaterialName(materials.tier2AvatarFull)}, " +
+                $"t3Small={MaterialName(materials.tier3AvatarSmall)}, t3Full={MaterialName(materials.tier3AvatarFull)}."
+            );
+        }
+
+        private static string MaterialName(Material material) {
+            return material != null ? material.name : "<null>";
         }
 
         #endregion
@@ -183,6 +216,7 @@ namespace BeatLeader {
         public static Material UIBlurMaterial;
 
         public static MaterialCollection Materials;
+        private static List<Material> _loadedMaterials = new List<Material>();
 
         private static void LoadMaterials(AssetBundle assetBundle) {
             LogoMaterial = assetBundle.LoadAsset<Material>("LogoMaterial");
@@ -208,6 +242,101 @@ namespace BeatLeader {
             SliderMaterials = assetBundle.LoadAsset<SliderMaterials>("SliderMaterials");
             UIBlurMaterial = assetBundle.LoadAsset<Material>("UIBlurMaterial");
             Materials = assetBundle.LoadAsset<MaterialCollection>("MaterialCollection");
+            _loadedMaterials = assetBundle.LoadAllAssets<Material>().Where(material => material != null).ToList();
+            Plugin.Log.Info($"[BundleLoader] Loaded {_loadedMaterials.Count} materials from asset bundle.");
+            LogAvatarThemeMaterialCandidates();
+        }
+
+        private static void LogAvatarThemeMaterialCandidates() {
+            var candidateNames = _loadedMaterials
+                .Select(material => material.name)
+                .Where(name => IsAvatarThemeMaterialCandidate(name))
+                .Distinct()
+                .Take(60)
+                .ToArray();
+
+            if (candidateNames.Length == 0) {
+                Plugin.Log.Info("[AvatarTheme] No obvious avatar theme material candidates were found in asset bundle material names.");
+                return;
+            }
+
+            Plugin.Log.Info($"[AvatarTheme] Avatar theme material candidates: {string.Join(", ", candidateNames)}");
+        }
+
+        private static bool IsAvatarThemeMaterialCandidate(string name) {
+            var normalizedName = NormalizeAssetName(name);
+            return normalizedName.Contains("avatar") ||
+                normalizedName.Contains("booster") ||
+                normalizedName.Contains("thesun") ||
+                normalizedName.Contains("themoon") ||
+                normalizedName.Contains("thestar") ||
+                normalizedName.Contains("spark") ||
+                normalizedName.Contains("special") ||
+                normalizedName.Contains("tier");
+        }
+
+        public static bool TryGetAvatarThemeMaterial(ThemeType themeType, ThemeTier themeTier, bool smallVersion, out Material material) {
+            material = null;
+            if (_loadedMaterials == null || _loadedMaterials.Count == 0) {
+                return false;
+            }
+
+            var themeToken = NormalizeAssetName(themeType.ToString());
+            var tierToken = NormalizeAssetName(themeTier.ToString());
+            var preferred = _loadedMaterials.FirstOrDefault(candidate => {
+                var name = NormalizeAssetName(candidate.name);
+                return name.Contains(themeToken) &&
+                    name.Contains(tierToken) &&
+                    name.Contains("avatar") &&
+                    IsPreferredAvatarSize(name, smallVersion);
+            });
+
+            preferred ??= _loadedMaterials.FirstOrDefault(candidate => {
+                var name = NormalizeAssetName(candidate.name);
+                return name.Contains(themeToken) &&
+                    name.Contains(tierToken) &&
+                    IsPreferredAvatarSize(name, smallVersion);
+            });
+
+            preferred ??= _loadedMaterials.FirstOrDefault(candidate => {
+                var name = NormalizeAssetName(candidate.name);
+                return name.Contains(themeToken) &&
+                    name.Contains(tierToken) &&
+                    name.Contains("avatar");
+            });
+
+            preferred ??= _loadedMaterials.FirstOrDefault(candidate => {
+                var name = NormalizeAssetName(candidate.name);
+                return name.Contains(themeToken) &&
+                    name.Contains(tierToken) &&
+                    !name.Contains("small");
+            });
+
+            preferred ??= _loadedMaterials.FirstOrDefault(candidate => {
+                var name = NormalizeAssetName(candidate.name);
+                return name.Contains(themeToken) &&
+                    name.Contains(tierToken);
+            });
+
+            if (preferred == null) {
+                return false;
+            }
+
+            material = preferred;
+            Plugin.Log.Info(
+                $"[AvatarTheme] Resolved avatar material fallback '{preferred.name}' for type={themeType}, tier={themeTier}, small={smallVersion}."
+            );
+            return true;
+        }
+
+        private static bool IsPreferredAvatarSize(string normalizedName, bool smallVersion) {
+            return smallVersion
+                ? normalizedName.Contains("small")
+                : !normalizedName.Contains("small");
+        }
+
+        private static string NormalizeAssetName(string value) {
+            return new string(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
         }
 
         #endregion

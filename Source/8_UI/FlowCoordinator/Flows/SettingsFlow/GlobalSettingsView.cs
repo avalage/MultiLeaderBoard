@@ -32,6 +32,7 @@ namespace BeatLeader.UI.Hub {
         private bool _initialMenuButtonEnabled;
         private bool _initialNoticeboardEnabled;
         private bool _initialScoreSubmissionsEnabled;
+        private bool _initialAccSaberProfileStatsEnabled;
         private BLLanguage _initialLanguage;
         private BeatLeaderServer _initialServer;
 
@@ -39,12 +40,14 @@ namespace BeatLeader.UI.Hub {
             BeatLeaderMenuButtonManager.MenuButtonEnabled = _initialMenuButtonEnabled;
             PluginConfig.NoticeboardEnabled = _initialNoticeboardEnabled;
             PluginConfig.ScoreSubmissionsEnabled = _initialScoreSubmissionsEnabled;
+            PluginConfig.AccSaberProfileStatsDisplay = _initialAccSaberProfileStatsEnabled;
             PluginConfig.SelectedLanguage = _initialLanguage;
             PluginConfig.MainServer = _initialServer;
 
             _menuButtonToggle.SetActive(_initialMenuButtonEnabled);
             _noticeboardToggle.SetActive(_initialNoticeboardEnabled);
             _scoreSubmissionsToggle.SetActive(_initialScoreSubmissionsEnabled);
+            _accSaberProfileStatsToggle.SetActive(_initialAccSaberProfileStatsEnabled);
             _languageDropdown.Select(_initialLanguage);
             _serverDropdown.Select(_initialServer);
         }
@@ -54,9 +57,11 @@ namespace BeatLeader.UI.Hub {
             _initialMenuButtonEnabled = BeatLeaderMenuButtonManager.MenuButtonEnabled;
             _initialNoticeboardEnabled = PluginConfig.NoticeboardEnabled;
             _initialScoreSubmissionsEnabled = PluginConfig.ScoreSubmissionsEnabled;
+            _initialAccSaberProfileStatsEnabled = PluginConfig.AccSaberProfileStatsDisplay;
             _initialLanguage = PluginConfig.SelectedLanguage;
             _initialServer = PluginConfig.MainServer;
             _scoreSubmissionsToggle?.SetActive(_initialScoreSubmissionsEnabled, false);
+            _accSaberProfileStatsToggle?.SetActive(_initialAccSaberProfileStatsEnabled, false);
         }
 
         private void RefreshNotice() {
@@ -72,6 +77,7 @@ namespace BeatLeader.UI.Hub {
         private Toggle _menuButtonToggle = null!;
         private Toggle _noticeboardToggle = null;
         private Toggle _scoreSubmissionsToggle = null;
+        private Toggle _accSaberProfileStatsToggle = null;
         private TextDropdown<BLLanguage> _languageDropdown = null!;
         private TextDropdown<BeatLeaderServer> _serverDropdown = null!;
         private ReloadNotice _reloadNotice = null!;
@@ -128,6 +134,15 @@ namespace BeatLeader.UI.Hub {
                         .Bind(ref _scoreSubmissionsToggle)
                         .InNamedRail("Upload Scores"),
                     //
+                    new Toggle()
+                        .With(x => x.SetActive(PluginConfig.AccSaberProfileStatsDisplay, false))
+                        .WithListener(
+                            x => x.Active,
+                            HandleAccSaberProfileStatsEnabled
+                        )
+                        .Bind(ref _accSaberProfileStatsToggle)
+                        .InNamedRail("AccSaber Profile Stats"),
+                    //
                     new ReloadNotice()
                         .AsFlexItem(margin: new() { top = 4f })
                         .Bind(ref _reloadNotice)
@@ -179,6 +194,10 @@ namespace BeatLeader.UI.Hub {
         private void HandleScoreSubmissionsEnabled(bool enabled) {
             PluginConfig.ScoreSubmissionsAutoDisabledByConflict = false;
             PluginConfig.ScoreSubmissionsEnabled = enabled;
+        }
+
+        private void HandleAccSaberProfileStatsEnabled(bool enabled) {
+            PluginConfig.AccSaberProfileStatsDisplay = enabled;
         }
 
         #endregion

@@ -64,8 +64,14 @@ namespace BeatLeader.Utils {
         #region Replays
 
         public static IEnumerable<string> GetAllReplayPaths() {
-            return Directory.EnumerateFiles(replaysFolderPath, "*.bsor")
-                .Concat(Directory.EnumerateFiles(ReplayerCache.CacheDirectory, "*.bsor"));
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var directory in ReplaySearchDirectories()) {
+                foreach (var path in EnumerateReplayPaths(directory)) {
+                    if (paths.Add(path)) {
+                        yield return path;
+                    }
+                }
+            }
         }
 
         public static string GetAbsoluteReplayPath(string fileName) {
@@ -137,6 +143,29 @@ namespace BeatLeader.Utils {
 
         private static readonly string replaysFolderPath = Environment.CurrentDirectory + "\\UserData\\BeatLeader\\Replays\\";
         private static readonly string playlistsFolderPath = Environment.CurrentDirectory + "\\Playlists\\";
+
+        private static IEnumerable<string> ReplaySearchDirectories() {
+            yield return replaysFolderPath;
+            yield return ReplayerCache.CacheDirectory;
+        }
+
+        private static IEnumerable<string> EnumerateReplayPaths(string directory) {
+            if (!Directory.Exists(directory)) {
+                yield break;
+            }
+
+            IEnumerable<string> paths;
+            try {
+                paths = Directory.EnumerateFiles(directory, "*.bsor", SearchOption.AllDirectories).ToArray();
+            } catch (Exception ex) {
+                Plugin.Log.Debug($"[FileManager] Unable to enumerate replays in {directory}. Reason: {ex.Message}");
+                yield break;
+            }
+
+            foreach (var path in paths) {
+                yield return path;
+            }
+        }
 
         static FileManager() {
             EnsureDirectoryExists(replaysFolderPath);

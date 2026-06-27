@@ -183,7 +183,7 @@ namespace BeatLeader.UI.Replayer {
         }
 
         protected override GameObject Construct() {
-            return new Layout {
+            return new Background {
                 Children = {
                     new ScrollArea {
                         ScrollContent = CreateContent(),
@@ -193,7 +193,15 @@ namespace BeatLeader.UI.Replayer {
                         .AsFlexItem()
                         .With(x => scrollArea.Scrollbar = x)
                 }
-            }.AsFlexGroup(gap: 1f).AsFlexItem().Use();
+            }.AsFlexGroup(
+                gap: 1f,
+                padding: 2f
+            ).With(x => {
+                x.Sprite = BundleLoader.BlackTransparentBG;
+                x.Material = GameResources.UINoGlowMaterial;
+                x.Color = new Color(0.055f, 0.055f, 0.06f, 0.96f);
+                x.PixelsPerUnit = 7f;
+            }).AsFlexItem().Use();
         }
 
         protected override void OnInitialize() {

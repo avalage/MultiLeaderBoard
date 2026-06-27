@@ -138,6 +138,8 @@ namespace BeatLeader.Components {
         #region Events
 
         private void OnScoresRequestStateChanged(WebRequests.IWebRequest<ScoresTableContent> instance, WebRequests.RequestState state, string? failReason) {
+            var result = instance?.Result;
+            Plugin.Log.Info($"[ScoresTable] ScoresRequest state={state}; failReason={failReason ?? "none"}; rows={result?.MainRowContents.Count.ToString() ?? "null"}; extraRow={result?.ExtraRowContent != null}; currentContent={_content != null}");
             if (state is not WebRequests.RequestState.Finished) {
                 CancelPerformancePointRequests();
                 _scoreSaberLeaderboardInfo = ScoreSaberLeaderboardInfo.Unknown;
@@ -145,13 +147,20 @@ namespace BeatLeader.Components {
                 return;
             }
 
+            if (result == null) {
+                Plugin.Log.Warn("[ScoresTable] Finished score request without result content.");
+                PresentContent(null);
+                return;
+            }
+
             _scoreSaberLeaderboardInfo = ScoreSaberLeaderboardInfo.Unknown;
-            ClearScoreSaberPp(instance.Result);
-            ClearAccSaberAp(instance.Result);
-            ApplyBeatLeaderPpVisibility(instance.Result);
-            PresentContent(instance.Result);
-            RequestScoreSaberPp(instance.Result);
-            RequestAccSaberAp(instance.Result);
+            ClearScoreSaberPp(result);
+            ClearAccSaberAp(result);
+            ApplyBeatLeaderPpVisibility(result);
+            PresentContent(result);
+            Plugin.Log.Info($"[ScoresTable] Presented new scores content; rows={result.MainRowContents.Count}; page={result.CurrentPage}");
+            RequestScoreSaberPp(result);
+            RequestAccSaberAp(result);
         }
 
         private void OnLeaderboardVisibleChanged(bool isVisible) {
@@ -282,23 +291,28 @@ namespace BeatLeader.Components {
             CancelScoreSaberPpRequest();
 
             if (!BeatLeaderDarkGoldTheme.Enabled || content == null || !CellTypeMask.HasFlag(ScoreRowCellType.PerformancePoints)) {
+                Plugin.Log.Info($"[ScoreSaberPP] Request skipped; theme={BeatLeaderDarkGoldTheme.Enabled}; contentNull={content == null}; ppCell={CellTypeMask.HasFlag(ScoreRowCellType.PerformancePoints)}");
                 return;
             }
 
             if (!isActiveAndEnabled || !gameObject.activeInHierarchy) {
+                Plugin.Log.Info("[ScoreSaberPP] Request skipped; scores table is inactive.");
                 return;
             }
 
             var rows = EnumerateScoreRows(content).ToArray();
             if (rows.Length == 0) {
+                Plugin.Log.Info("[ScoreSaberPP] Request skipped; no score rows.");
                 return;
             }
 
             var leaderboardKey = LeaderboardState.SelectedLeaderboardKey;
             if (string.IsNullOrEmpty(leaderboardKey.Hash) || string.IsNullOrEmpty(leaderboardKey.Mode) || leaderboardKey.DiffId == 0) {
+                Plugin.Log.Info($"[ScoreSaberPP] Request skipped; invalid leaderboard key hash={leaderboardKey.Hash}, diff={leaderboardKey.Diff}, mode={leaderboardKey.Mode}, diffId={leaderboardKey.DiffId}.");
                 return;
             }
 
+            Plugin.Log.Info($"[ScoreSaberPP] Request scheduled; rows={rows.Length}; hash={leaderboardKey.Hash}; diff={leaderboardKey.Diff}; mode={leaderboardKey.Mode}.");
             _scoreSaberPpCoroutine = StartCoroutine(LoadScoreSaberPpCoroutine(_scoreSaberPpRequestId, content, rows, leaderboardKey));
         }
 
@@ -327,6 +341,7 @@ namespace BeatLeader.Components {
             }
 
             if (!_scoreSaberLeaderboardInfo.IsRanked) {
+                Plugin.Log.Info($"[ScoreSaberPP] Leaderboard is not ranked or unknown; ranked={_scoreSaberLeaderboardInfo.IsRanked}; known={_scoreSaberLeaderboardInfo.IsKnown}.");
                 _scoreSaberPpCoroutine = null;
                 RefreshCells();
                 UpdateLayout();
@@ -335,6 +350,7 @@ namespace BeatLeader.Components {
 
             var anyEstimated = ApplyScoreSaberPp(rows, _scoreSaberLeaderboardInfo);
             _scoreSaberPpCoroutine = null;
+            Plugin.Log.Info($"[ScoreSaberPP] Estimate finished; updated={anyEstimated}; rows={rows.Length}; maxPp={_scoreSaberLeaderboardInfo.MaxPp}.");
 
             if (!anyEstimated) {
                 yield break;
@@ -353,10 +369,12 @@ namespace BeatLeader.Components {
         private IEnumerator LoadScoreSaberLeaderboardInfo(int requestId, ScoresTableContent content, LeaderboardKey leaderboardKey) {
             if (ScoreSaberLeaderboardInfoProvider.TryGetCached(leaderboardKey, out var cachedInfo)) {
                 _scoreSaberLeaderboardInfo = cachedInfo;
+                Plugin.Log.Info($"[ScoreSaberPP] Leaderboard info cache hit; ranked={cachedInfo.IsRanked}; stars={cachedInfo.Stars}; maxPp={cachedInfo.MaxPp}.");
                 yield break;
             }
 
             var url = ScoreSaberLeaderboardInfoProvider.BuildInfoUrl(leaderboardKey);
+            Plugin.Log.Info($"[ScoreSaberPP] Loading leaderboard info: {url}");
             using var request = UnityWebRequest.Get(url);
             _activeScoreSaberLeaderboardInfoRequest = request;
             request.timeout = ScoreSaberLeaderboardInfoProvider.TimeoutSeconds;
@@ -382,6 +400,7 @@ namespace BeatLeader.Components {
 
             _scoreSaberLeaderboardInfo = info;
             ScoreSaberLeaderboardInfoProvider.SaveToCache(leaderboardKey, info);
+            Plugin.Log.Info($"[ScoreSaberPP] Leaderboard info loaded; ranked={info.IsRanked}; stars={info.Stars}; maxPp={info.MaxPp}.");
         }
 
         private static bool ApplyScoreSaberPp(IEnumerable<Score> rows, ScoreSaberLeaderboardInfo leaderboardInfo) {
@@ -533,15 +552,18 @@ namespace BeatLeader.Components {
             CancelAccSaberApRequest();
 
             if (!BeatLeaderDarkGoldTheme.Enabled || content == null || !CellTypeMask.HasFlag(ScoreRowCellType.PerformancePoints)) {
+                Plugin.Log.Info($"[AccSaberAP] Request skipped; theme={BeatLeaderDarkGoldTheme.Enabled}; contentNull={content == null}; ppCell={CellTypeMask.HasFlag(ScoreRowCellType.PerformancePoints)}");
                 return;
             }
 
             if (!isActiveAndEnabled || !gameObject.activeInHierarchy) {
+                Plugin.Log.Info("[AccSaberAP] Request skipped; scores table is inactive.");
                 return;
             }
 
             var leaderboardKey = LeaderboardState.SelectedLeaderboardKey;
             if (!AccSaberApiProvider.CanRequestScore(leaderboardKey)) {
+                Plugin.Log.Info($"[AccSaberAP] Request skipped; leaderboard key is not supported hash={leaderboardKey.Hash}, diff={leaderboardKey.Diff}, mode={leaderboardKey.Mode}.");
                 return;
             }
 
@@ -549,6 +571,7 @@ namespace BeatLeader.Components {
                 .Where(row => !string.IsNullOrEmpty(row.originalPlayer?.id))
                 .ToArray();
             if (rows.Length == 0) {
+                Plugin.Log.Info("[AccSaberAP] Request skipped; no score rows with player ids.");
                 return;
             }
 
@@ -566,15 +589,18 @@ namespace BeatLeader.Components {
             }
 
             if (updatedFromCache) {
+                Plugin.Log.Info($"[AccSaberAP] Applied cached AP for rows; totalRows={rows.Length}; pendingRows={pendingRows.Count}.");
                 NotifyPerformancePointsUpdated(rows);
                 RefreshCells();
                 UpdateLayout();
             }
 
             if (pendingRows.Count == 0) {
+                Plugin.Log.Info("[AccSaberAP] No pending AP requests after cache lookup.");
                 return;
             }
 
+            Plugin.Log.Info($"[AccSaberAP] Request scheduled; pendingRows={pendingRows.Count}; hash={leaderboardKey.Hash}; diff={leaderboardKey.Diff}; mode={leaderboardKey.Mode}.");
             _accSaberApCoroutine = StartCoroutine(LoadAccSaberApCoroutine(_accSaberApRequestId, content, pendingRows.ToArray(), leaderboardKey));
         }
 
@@ -611,6 +637,8 @@ namespace BeatLeader.Components {
                 request.SendWebRequest();
             }
 
+            Plugin.Log.Info($"[AccSaberAP] Sent AP requests; count={requests.Count}; hash={leaderboardKey.Hash}; diff={leaderboardKey.Diff}; mode={leaderboardKey.Mode}.");
+
             while (requests.Any(item => !item.Request.isDone)) {
                 if (requestId != _accSaberApRequestId || !ReferenceEquals(content, _content)) {
                     yield break;
@@ -646,6 +674,7 @@ namespace BeatLeader.Components {
             }
 
             _accSaberApCoroutine = null;
+            Plugin.Log.Info($"[AccSaberAP] AP requests finished; updated={updated}; rows={rows.Length}.");
             if (!updated || requestId != _accSaberApRequestId || !ReferenceEquals(content, _content)) {
                 yield break;
             }
@@ -670,23 +699,27 @@ namespace BeatLeader.Components {
         }
 
         private void OnUploadRequestStateChanged(WebRequests.IWebRequest<ScoreUploadResponse> instance, WebRequests.RequestState state, string? failReason) {
+            var result = instance?.Result;
+            Plugin.Log.Info($"[AccSaberAP] Upload state={state}; status={result?.Status.ToString() ?? "null"}; failReason={failReason ?? "none"}.");
             switch (state) {
                 case WebRequests.RequestState.Started:
                     _lastUploadLeaderboardKey = LeaderboardState.SelectedLeaderboardKey;
                     break;
                 case WebRequests.RequestState.Finished:
-                    RegisterFreshUploadAccSaberScore(instance.Result);
+                    RegisterFreshUploadAccSaberScore(result);
                     break;
             }
         }
 
         private void RegisterFreshUploadAccSaberScore(ScoreUploadResponse? response) {
             if (response?.Score?.originalPlayer == null || response.Status == ScoreUploadStatus.Error) {
+                Plugin.Log.Info($"[AccSaberAP] Fresh upload registration skipped; responseNull={response == null}; scoreNull={response?.Score == null}; playerNull={response?.Score?.originalPlayer == null}; status={response?.Status.ToString() ?? "null"}.");
                 return;
             }
 
             var playerId = response.Score.originalPlayer.id;
             if (string.IsNullOrEmpty(playerId) || !AccSaberApiProvider.CanRequestScore(_lastUploadLeaderboardKey)) {
+                Plugin.Log.Info($"[AccSaberAP] Fresh upload registration skipped; playerId={playerId ?? "null"}; canRequest={AccSaberApiProvider.CanRequestScore(_lastUploadLeaderboardKey)}.");
                 return;
             }
 
@@ -695,6 +728,7 @@ namespace BeatLeader.Components {
             _freshUploadAccSaberExpiresAt = Time.realtimeSinceStartup + AccSaberFreshUploadCacheBypassSeconds;
             AccSaberApiProvider.ClearScoreCache(_lastUploadLeaderboardKey, playerId);
 
+            Plugin.Log.Info($"[AccSaberAP] Fresh upload registered; playerId={playerId}; hash={_lastUploadLeaderboardKey.Hash}; diff={_lastUploadLeaderboardKey.Diff}; mode={_lastUploadLeaderboardKey.Mode}.");
             ScheduleFreshUploadAccSaberRefresh(_lastUploadLeaderboardKey, playerId);
         }
 
@@ -708,9 +742,11 @@ namespace BeatLeader.Components {
         private void ScheduleFreshUploadAccSaberRefresh(LeaderboardKey leaderboardKey, string playerId) {
             CancelFreshUploadAccSaberRefresh();
             if (!isActiveAndEnabled || !gameObject.activeInHierarchy) {
+                Plugin.Log.Info("[AccSaberAP] Fresh upload refresh not scheduled; scores table is inactive.");
                 return;
             }
 
+            Plugin.Log.Info($"[AccSaberAP] Fresh upload refresh scheduled; playerId={playerId}; hash={leaderboardKey.Hash}; diff={leaderboardKey.Diff}; mode={leaderboardKey.Mode}; attempts={AccSaberFreshUploadRetryCount}.");
             _freshUploadAccSaberRefreshCoroutine = StartCoroutine(FreshUploadAccSaberRefreshCoroutine(
                 ++_freshUploadAccSaberRefreshRequestId,
                 leaderboardKey,
@@ -724,19 +760,25 @@ namespace BeatLeader.Components {
                     yield return new WaitForSecondsRealtime(AccSaberFreshUploadRetryDelaySeconds);
                 }
 
+                Plugin.Log.Info($"[AccSaberAP] Fresh upload refresh attempt {attempt + 1}/{AccSaberFreshUploadRetryCount}; playerId={playerId}; requestId={requestId}.");
+
                 if (requestId != _freshUploadAccSaberRefreshRequestId || !IsFreshUploadAccSaberScore(leaderboardKey, playerId)) {
+                    Plugin.Log.Info("[AccSaberAP] Fresh upload refresh stopped; request id or fresh score marker is no longer valid.");
                     yield break;
                 }
 
                 if (!TryGetCurrentScoreRow(playerId, out var score)) {
+                    Plugin.Log.Info("[AccSaberAP] Fresh upload refresh attempt skipped; current score row was not found.");
                     continue;
                 }
 
                 if (score.withAccSaberAp) {
+                    Plugin.Log.Info("[AccSaberAP] Fresh upload refresh stopped; score already has AccSaber AP.");
                     break;
                 }
 
                 if (!leaderboardKey.Equals(LeaderboardState.SelectedLeaderboardKey) || _content == null) {
+                    Plugin.Log.Info("[AccSaberAP] Fresh upload refresh attempt skipped; selected leaderboard changed or content is null.");
                     continue;
                 }
 

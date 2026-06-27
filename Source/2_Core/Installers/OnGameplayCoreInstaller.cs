@@ -160,7 +160,7 @@ namespace BeatLeader.Installers {
         private static Ticket _submissionTicket;
 
         private void DisableScoreSubmission() {
-            _submissionTicket = Container.Resolve<Submission>()?.DisableScoreSubmission("BeatLeaderReplayer", "Playback");
+            _submissionTicket = Container.Resolve<Submission>()?.DisableScoreSubmission("MultiLeaderboardReplayer", "Playback");
             ReplayerLauncher.LaunchData.ReplayWasFinishedEvent += HandleReplayWasFinished;
         }
         private void HandleReplayWasFinished(StandardLevelScenesTransitionSetupDataSO data, Models.ReplayLaunchData launchData) {

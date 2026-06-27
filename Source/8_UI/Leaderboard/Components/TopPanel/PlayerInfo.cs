@@ -75,6 +75,7 @@ namespace BeatLeader.Components {
             PrestigePanel.PrestigeWasPressedEvent += IncrementPrestigeIcon;
             GlobalSettingsView.ExperienceBarConfigEvent += OnExperienceBarConfigChanged;
             PluginConfig.ScoresContextChangedEvent += ChangeScoreContext;
+            PluginConfig.LeaderboardDisplaySettingsChangedEvent += OnLeaderboardDisplaySettingsChanged;
             PrestigeLevelsManager.IconsLoadedEvent += OnPrestigeIconsLoaded;
         }
 
@@ -91,6 +92,7 @@ namespace BeatLeader.Components {
             PrestigePanel.PrestigeWasPressedEvent -= IncrementPrestigeIcon;
             GlobalSettingsView.ExperienceBarConfigEvent -= OnExperienceBarConfigChanged;
             PluginConfig.ScoresContextChangedEvent -= ChangeScoreContext;
+            PluginConfig.LeaderboardDisplaySettingsChangedEvent -= OnLeaderboardDisplaySettingsChanged;
             PrestigeLevelsManager.IconsLoadedEvent -= OnPrestigeIconsLoaded;
         }
 
@@ -365,6 +367,19 @@ namespace BeatLeader.Components {
         private void ChangeScoreContext(int context) {
             if (player != null) {
                 OnProfileUpdated(player);
+            }
+        }
+
+        private void OnLeaderboardDisplaySettingsChanged(LeaderboardDisplaySettings settings) {
+            if (!settings.AccSaberProfileStatsDisplay) {
+                CancelAccSaberProfileRequest();
+                _accSaberStatsPlayerId = null;
+                AccSaberStatsActive = false;
+                return;
+            }
+
+            if (player != null) {
+                RequestAccSaberProfile(player);
             }
         }
 
@@ -713,7 +728,11 @@ namespace BeatLeader.Components {
         private void RequestAccSaberProfile(Player player, bool useCache = true) {
             CancelAccSaberProfileRequest();
 
-            if (!BeatLeaderDarkGoldTheme.Enabled || player == null || string.IsNullOrEmpty(player.id) || player.id == "0") {
+            if (!PluginConfig.AccSaberProfileStatsDisplay ||
+                !BeatLeaderDarkGoldTheme.Enabled ||
+                player == null ||
+                string.IsNullOrEmpty(player.id) ||
+                player.id == "0") {
                 _accSaberStatsPlayerId = null;
                 AccSaberStatsActive = false;
                 return;
@@ -784,6 +803,12 @@ namespace BeatLeader.Components {
         }
 
         private void ApplyAccSaberProfile(string playerId, AccSaberProfileInfo profile) {
+            if (!PluginConfig.AccSaberProfileStatsDisplay) {
+                _accSaberStatsPlayerId = null;
+                AccSaberStatsActive = false;
+                return;
+            }
+
             _accSaberStatsPlayerId = playerId;
             AccSaberGlobalRankText = FormatProfileRank(profile.Rank, BeatLeaderDarkGoldTheme.AccSaberApHtml);
             AccSaberCountryRankText = FormatProfileRank(profile.CountryRank, BeatLeaderDarkGoldTheme.AccSaberApHtml);

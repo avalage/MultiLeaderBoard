@@ -166,13 +166,15 @@ namespace BeatLeader.UI.Replayer {
             if (!_markerGroups.TryGetValue(name, out var group)) return;
             group.Enabled = enable;
             var mask = _uiSettings!.MarkersMask;
-            _uiSettings!.MarkersMask = name switch {
-                "Miss" => mask | TimelineMarkersMask.Miss,
-                "Bomb" => mask | TimelineMarkersMask.Bomb,
-                "Pause" => mask | TimelineMarkersMask.Pause,
-                "Wall" => mask | TimelineMarkersMask.Wall,
+            var markerMask = name switch {
+                "Miss" => TimelineMarkersMask.Miss,
+                "Bomb" => TimelineMarkersMask.Bomb,
+                "Pause" => TimelineMarkersMask.Pause,
+                "Wall" => TimelineMarkersMask.Wall,
                 _ => throw new ArgumentOutOfRangeException(nameof(name), name, null)
             };
+
+            _uiSettings!.MarkersMask = enable ? mask | markerMask : mask & ~markerMask;
         }
 
         public bool GetMarkersEnabled(string name) {
@@ -223,10 +225,13 @@ namespace BeatLeader.UI.Replayer {
 
         private AnimatedValue<float> _backgroundScale = null!;
         private AnimatedValue<Color> _backgroundColor = null!;
+        private static readonly Color TrackColor = new(0.31f, 0.31f, 0.34f, 1f);
+        private static readonly Color TrackHoveredColor = new(0.42f, 0.39f, 0.24f, 1f);
+        private static readonly Color HandleColor = new(1f, 0.84f, 0.1f, 1f);
 
         protected override GameObject Construct() {
             _backgroundScale = RememberAnimated(1f, 15.fact());
-            _backgroundColor = RememberAnimated(UIStyle.InputColorSet.Color, 15.fact());
+            _backgroundColor = RememberAnimated(TrackColor, 15.fact());
 
             _backgroundScale.ValueChangedEvent += x => {
                 foreach (var group in _markerGroupsPool.SpawnedComponents) {
@@ -236,9 +241,10 @@ namespace BeatLeader.UI.Replayer {
 
             return new BackgroundButton {
                     Image = {
-                        Sprite = BundleLoader.Sprites.background,
-                        PixelsPerUnit = 12f,
-                        Material = GameResources.UINoGlowMaterial
+                        Sprite = BundleLoader.BlackTransparentBG,
+                        PixelsPerUnit = 14f,
+                        Material = GameResources.UINoGlowMaterial,
+                        Color = TrackColor
                     },
                     Colors = null,
                     Children = {
@@ -259,12 +265,13 @@ namespace BeatLeader.UI.Replayer {
                                     ContentTransform = {
                                         anchorMin = new(0.5f, 0f),
                                         anchorMax = new(0.5f, 1f),
-                                        sizeDelta = new(1f, 0f),
+                                        sizeDelta = new(1.2f, 1f),
                                         pivot = new(0f, 0.5f)
                                     },
-                                    Sprite = BundleLoader.Sprites.background,
+                                    Sprite = BundleLoader.WhiteBG,
                                     PixelsPerUnit = 30f,
-                                    Color = Color.white.ColorWithAlpha(0.8f)
+                                    Material = GameResources.UINoGlowMaterial,
+                                    Color = HandleColor
                                 }.Bind(ref _handle)
                             }
                         }.WithNativeComponent(out _pointerEventsHandler).With(_ => {
@@ -291,7 +298,7 @@ namespace BeatLeader.UI.Replayer {
 
         protected override void OnInitialize() {
             base.OnInitialize();
-            this.AsFlexItem(size: new() { y = 4f });
+            this.AsFlexItem(size: new() { y = 5f });
             this.WithListener(x => x.Value, HandleSliderValueChanged);
         }
 
@@ -311,7 +318,7 @@ namespace BeatLeader.UI.Replayer {
             var dragging = handler.IsPressed || handler.IsHovered;
 
             _backgroundScale.Value = dragging ? 1.4f : 1f;
-            _backgroundColor.Value = dragging ? UIStyle.InputColorSet.HoveredColor : UIStyle.InputColorSet.Color;
+            _backgroundColor.Value = dragging ? TrackHoveredColor : TrackColor;
         }
 
         private void HandlePointerDown(PointerEventsHandler handler, PointerEventData eventData) {

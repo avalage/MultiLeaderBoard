@@ -13,5 +13,6 @@ namespace BeatLeader.Models
     {
         public bool ClanCaptureDisplay { get; set; }
         public RankedStarsDisplayMode RankedStarsDisplayMode { get; set; } = RankedStarsDisplayMode.Both;
+        public bool AccSaberProfileStatsDisplay { get; set; } = true;
     }
 }

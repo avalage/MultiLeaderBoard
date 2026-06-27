@@ -1,8 +1,10 @@
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
 #nullable disable
 
 namespace BeatLeader {
+    [MovedFrom(true, "BeatLeader", "BeatLeader", null)]
     [CreateAssetMenu(fileName = "SpriteCollection", menuName = "SpriteCollection")]
     public class SpriteCollection : ScriptableObject {
         [Space] [Header("Backgrounds")]

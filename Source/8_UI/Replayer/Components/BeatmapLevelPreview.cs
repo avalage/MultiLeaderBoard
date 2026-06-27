@@ -24,7 +24,9 @@ namespace BeatLeader.UI.Replayer {
                         }.AsFlexItem(size: "auto").Bind(ref label)
                     }
                 }.AsBackground(
-                    material: BundleLoader.Materials.tintedBlurredBackgroundMaterial,
+                    sprite: BundleLoader.BlackTransparentBG,
+                    color: new Color(0.015f, 0.015f, 0.02f, 0.94f),
+                    material: GameResources.UINoGlowMaterial,
                     pixelsPerUnit: 12f
                 ).AsFlexGroup(
                     padding: new() { left = 1f, right = 1f },

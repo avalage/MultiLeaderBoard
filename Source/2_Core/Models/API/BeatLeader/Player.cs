@@ -124,6 +124,8 @@ namespace BeatLeader.Models {
     }
 
     public class ProfileSettings : IPlayerProfileSettings {
+        private static readonly HashSet<string> LoggedFrameSettings = new();
+
         #region PlayerProfileSettings Impl
 
         string IPlayerProfileSettings.UserMessage => message;
@@ -137,22 +139,34 @@ namespace BeatLeader.Models {
 
         [JsonProperty("effectName")]
         private string EffectName {
-            set => RefreshTheme(value);
+            set {
+                effectName = value;
+                RefreshTheme(value);
+                LogFrameSettings();
+            }
         }
 
         [JsonProperty("hue")]
         private int? Hue {
-            set => hue = value ?? 0;
+            set {
+                hue = value ?? 0;
+                LogFrameSettings();
+            }
         }
 
         [JsonProperty("saturation")]
         private float? Saturation {
-            set => saturation = value ?? 0;
+            set {
+                saturation = value ?? 1.0f;
+                LogFrameSettings();
+            }
         }
+
+        [JsonIgnore] public string? effectName;
 
         [JsonIgnore] public int hue;
 
-        [JsonIgnore] public float saturation;
+        [JsonIgnore] public float saturation = 1.0f;
 
         public string message;
 
@@ -160,6 +174,19 @@ namespace BeatLeader.Models {
             ThemesUtils.ParseEffectName(effectName, out var themeType, out var themeTier);
             ThemeType = themeType;
             ThemeTier = themeTier;
+        }
+
+        [JsonIgnore]
+        public string FrameDebugDescription =>
+            $"effectName='{effectName ?? "<null>"}', type={ThemeType}, tier={ThemeTier}, hue={hue}, saturation={saturation}";
+
+        private void LogFrameSettings() {
+            var key = FrameDebugDescription;
+            if (!LoggedFrameSettings.Add(key)) {
+                return;
+            }
+
+            Plugin.Log.Info($"[AvatarFrame] ProfileSettings parsed; {FrameDebugDescription}.");
         }
     }
 

@@ -181,15 +181,15 @@ namespace BeatLeader.Utils {
             }
 
             var hash = replayInfo.CalculateReplayHash();
-            if (hashedHeaders.ContainsKey(hash)) {
-                Plugin.Log.Debug($"[ReplayManager] Replay info with the same hash already exists. Hash: {hash}");
-                return;
-            }
 
             var header = CreateReplayHeader(path, replayInfo);
-
             headers.Add(header);
-            hashedHeaders.Add(hash, header);
+
+            if (hashedHeaders.ContainsKey(hash)) {
+                Plugin.Log.Debug($"[ReplayManager] Replay info with the same hash already exists. Hash: {hash}. Keeping it in the replay list.");
+            } else {
+                hashedHeaders.Add(hash, header);
+            }
 
             SyncNotifyReplaysAdded();
         }

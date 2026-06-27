@@ -32,7 +32,7 @@ namespace BeatLeader.Interop {
             var registerMethod = replaySourcesType.GetMethod("Register", ReflectionUtils.StaticFlags);
             _setActiveMethod = genericSourceType.GetMethod("SetActive", ReflectionUtils.DefaultFlags);
 
-            _genericSourceInstance = Activator.CreateInstance(genericSourceType, "BeatLeaderReplayer");
+            _genericSourceInstance = Activator.CreateInstance(genericSourceType, "MultiLeaderboardReplayer");
             registerMethod?.Invoke(null, new[] { _genericSourceInstance });
             _cachedArgs = new object[1];
 

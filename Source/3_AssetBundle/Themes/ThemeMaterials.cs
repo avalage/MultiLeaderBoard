@@ -1,6 +1,8 @@
-﻿using UnityEngine;
+using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
 namespace BeatLeader.Themes {
+    [MovedFrom(true, "BeatLeader.Themes", "BeatLeader", null)]
     [CreateAssetMenu(fileName = "ThemeMaterials", menuName = "ThemeMaterials collection")]
     public class ThemeMaterials : ScriptableObject {
         public Material tier1AvatarFull;

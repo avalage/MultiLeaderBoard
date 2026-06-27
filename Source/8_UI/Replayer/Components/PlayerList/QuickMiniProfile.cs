@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Threading.Tasks;
+using BeatLeader.APIV2;
 using BeatLeader.Components;
 using BeatLeader.Models;
 using BeatLeader.UI.Reactive.Components;
+using BeatLeader.Utils;
 using Reactive;
 using Reactive.BeatSaber.Components;
 using Reactive.Components;
@@ -33,13 +36,10 @@ namespace BeatLeader.UI {
         }
 
         public bool UseAlternativeBlur {
+            get => _useAlternativeBlur;
             set {
-                var mat = value ? 
-                    BundleLoader.Materials.tintedBlurredBackgroundMaterial :
-                    GameResources.UIFogBackgroundMaterial;
-                _nameFitterBackground.Material = mat;
-                _rankFitterBackground.Material = mat;
-                _ppFitterBackground.Material = mat;
+                _useAlternativeBlur = value;
+                RefreshFitterBackgrounds();
             }
         }
 
@@ -51,6 +51,13 @@ namespace BeatLeader.UI {
 
         public void SetPlayer(IPlayer? player) {
             Player = player;
+            var requestId = ++_profileLoadRequestId;
+            player = ResolveCachedPlayer(player);
+            ApplyPlayer(player);
+            LoadFullPlayerIfNeeded(player, requestId).RunCatching();
+        }
+
+        private void ApplyPlayer(IPlayer? player) {
             _playerAvatar.SetAvatar(player);
             _playerCountryFlag.SetCountry(player?.Country ?? "not set");
             _playerCountryFlag.GetRootTransform().gameObject.SetActive(true);
@@ -60,7 +67,39 @@ namespace BeatLeader.UI {
             _playerPpLabel.Text = FormatUtils.FormatPP(player?.PerformancePoints ?? -1);
         }
 
+        private static IPlayer? ResolveCachedPlayer(IPlayer? player) {
+            if (player == null || player.ProfileSettings != null || string.IsNullOrEmpty(player.Id)) {
+                return player;
+            }
+
+            var cachedPlayer = ReplayManagerCache.GetPlayer(player.Id);
+            return cachedPlayer?.profileSettings != null ? cachedPlayer : player;
+        }
+
+        private async Task LoadFullPlayerIfNeeded(IPlayer? player, int requestId) {
+            if (player == null || player.ProfileSettings != null || string.IsNullOrEmpty(player.Id) || player.Id == "0") {
+                return;
+            }
+
+            var cachedPlayer = ReplayManagerCache.GetPlayer(player.Id);
+            if (cachedPlayer?.profileSettings != null) {
+                if (requestId == _profileLoadRequestId) {
+                    ApplyPlayer(cachedPlayer);
+                }
+                return;
+            }
+
+            var request = await PlayerRequest.SendRequest(player.Id).Join();
+            if (requestId != _profileLoadRequestId || request.Result == null) {
+                return;
+            }
+
+            ReplayManagerCache.AddPlayer(request.Result);
+            ApplyPlayer(request.Result);
+        }
+
         public void SetLoading() {
+            _profileLoadRequestId++;
             _playerAvatar.SetLoading();
             _playerCountryFlag.GetRootTransform().gameObject.SetActive(false);
 
@@ -83,6 +122,29 @@ namespace BeatLeader.UI {
         private Image _nameFitterBackground = null!;
         private Image _rankFitterBackground = null!;
         private Image _ppFitterBackground = null!;
+        private bool _useAlternativeBlur;
+        private int _profileLoadRequestId;
+
+        private void RefreshFitterBackgrounds() {
+            if (_nameFitterBackground == null || _rankFitterBackground == null || _ppFitterBackground == null) {
+                return;
+            }
+
+            var color = _useAlternativeBlur
+                ? new Color(0.015f, 0.015f, 0.02f, 0.94f)
+                : new Color(0.035f, 0.035f, 0.04f, 0.88f);
+
+            ApplyFitterBackground(_nameFitterBackground, color);
+            ApplyFitterBackground(_rankFitterBackground, color);
+            ApplyFitterBackground(_ppFitterBackground, color);
+        }
+
+        private static void ApplyFitterBackground(Image background, Color color) {
+            background.Sprite = BundleLoader.BlackTransparentBG;
+            background.Material = GameResources.UINoGlowMaterial;
+            background.Color = color;
+            background.PixelsPerUnit = 12f;
+        }
 
         protected override GameObject Construct() {
             static ReactiveComponent CreateFitter(
@@ -91,7 +153,12 @@ namespace BeatLeader.UI {
             ) {
                 var layout = new Background()
                     .Export(out background)
-                    .AsBlurBackground(pixelsPerUnit: 12f)
+                    .AsBackground(
+                        sprite: BundleLoader.BlackTransparentBG,
+                        color: new Color(0.015f, 0.015f, 0.02f, 0.94f),
+                        material: GameResources.UINoGlowMaterial,
+                        pixelsPerUnit: 12f
+                    )
                     .AsFlexGroup(
                         padding: new() { left = 1f, right = 1f },
                         gap: new() { x = 1f }
@@ -99,7 +166,9 @@ namespace BeatLeader.UI {
                         size: "auto",
                         maxSize: "100%"
                     );
-                layout.Children.AddRange(children);
+                foreach (var child in children) {
+                    layout.Children.Add(child);
+                }
                 return layout;
             }
 
@@ -111,7 +180,9 @@ namespace BeatLeader.UI {
                         justifyContent: Justify.FlexStart,
                         gap: new() { x = 0.5f }
                     );
-                layout.Children.AddRange(children);
+                foreach (var child in children) {
+                    layout.Children.Add(child);
+                }
                 return layout;
             }
 
@@ -176,7 +247,12 @@ namespace BeatLeader.UI {
 
         protected override void OnInitialize() {
             JustifyContent = Justify.FlexStart;
-            UseAlternativeBlur = false;
+            _playerAvatar.Setup(true);
+            RefreshFitterBackgrounds();
+        }
+
+        protected override void OnDestroy() {
+            _profileLoadRequestId++;
         }
 
         #endregion

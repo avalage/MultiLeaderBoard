@@ -1,8 +1,10 @@
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
 #nullable disable
 
 namespace BeatLeader {
+    [MovedFrom(true, "BeatLeader", "BeatLeader", null)]
     [CreateAssetMenu(fileName = "MaterialCollection", menuName = "MaterialCollection")]
     public class MaterialCollection : ScriptableObject {
         public Material blurMaterial;

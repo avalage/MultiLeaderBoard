@@ -1,6 +1,8 @@
-﻿using UnityEngine;
+using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
 namespace BeatLeader.Themes {
+    [MovedFrom(true, "BeatLeader.Themes", "BeatLeader", null)]
     [CreateAssetMenu(fileName = "ThemesCollection", menuName = "ThemesCollection")]
     public class ThemesCollection : ScriptableObject {
         public ThemeMaterials booster;

@@ -8,7 +8,7 @@ namespace BeatLeader {
             harmony.Patch(descriptor);
         }
 
-        private static readonly Harmony harmony = new("BeatLeader.AutoPatchesRegistry");
+        private static readonly Harmony harmony = new("MultiLeaderboard.AutoPatchesRegistry");
 
         public readonly HarmonyPatchDescriptor descriptor;
 

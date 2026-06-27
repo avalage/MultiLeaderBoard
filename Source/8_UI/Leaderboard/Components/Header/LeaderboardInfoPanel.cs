@@ -276,15 +276,18 @@ namespace BeatLeader.Components {
         private int _mapType;
         private DiffInfo _difficultyInfo;
         private ScoreSaberLeaderboardInfo _scoreSaberLeaderboardInfo = ScoreSaberLeaderboardInfo.Unknown;
-        private IEnumerator? _scoreSaberInfoCoroutine;
+        private Coroutine? _scoreSaberInfoCoroutine;
+        private MonoBehaviour? _scoreSaberInfoCoroutineRunner;
         private int _scoreSaberInfoRequestId;
         private UnityWebRequest? _activeScoreSaberInfoRequest;
         private AccSaberDifficultyInfo _accSaberDifficultyInfo = AccSaberDifficultyInfo.Unknown;
-        private IEnumerator? _accSaberInfoCoroutine;
+        private Coroutine? _accSaberInfoCoroutine;
+        private MonoBehaviour? _accSaberInfoCoroutineRunner;
         private int _accSaberInfoRequestId;
         private UnityWebRequest? _activeAccSaberInfoRequest;
         private bool _displayCaptorClan = PluginConfig.LeaderboardDisplaySettings.ClanCaptureDisplay;
         private string? _websiteLink;
+        private static CoroutineRunner? _coroutineRunner;
 
         private void SetBeatmap(BeatmapKey beatmap) {
             CancelScoreSaberInfoRequest();
@@ -340,8 +343,10 @@ namespace BeatLeader.Components {
                 return;
             }
 
-            _scoreSaberInfoCoroutine = LoadScoreSaberInfo(_scoreSaberInfoRequestId, leaderboardKey);
-            StartCoroutine(_scoreSaberInfoCoroutine);
+            _scoreSaberInfoCoroutine = StartManagedCoroutine(
+                LoadScoreSaberInfo(_scoreSaberInfoRequestId, leaderboardKey),
+                ref _scoreSaberInfoCoroutineRunner
+            );
         }
 
         private IEnumerator LoadScoreSaberInfo(int requestId, LeaderboardKey leaderboardKey) {
@@ -358,6 +363,7 @@ namespace BeatLeader.Components {
             }
 
             _scoreSaberInfoCoroutine = null;
+            _scoreSaberInfoCoroutineRunner = null;
 
             if (request.isNetworkError || request.isHttpError) {
                 Plugin.Log.Debug($"[ScoreSaberHeader] Failed to load leaderboard info for {leaderboardKey.Hash}/{leaderboardKey.Mode}/{leaderboardKey.Diff}: {request.responseCode} {request.error}");
@@ -380,11 +386,7 @@ namespace BeatLeader.Components {
 
         private void CancelScoreSaberInfoRequest() {
             _scoreSaberInfoRequestId++;
-
-            if (_scoreSaberInfoCoroutine != null) {
-                StopCoroutine(_scoreSaberInfoCoroutine);
-                _scoreSaberInfoCoroutine = null;
-            }
+            StopManagedCoroutine(ref _scoreSaberInfoCoroutine, ref _scoreSaberInfoCoroutineRunner);
 
             if (_activeScoreSaberInfoRequest != null) {
                 _activeScoreSaberInfoRequest.Abort();
@@ -413,8 +415,10 @@ namespace BeatLeader.Components {
                 return;
             }
 
-            _accSaberInfoCoroutine = LoadAccSaberInfo(_accSaberInfoRequestId, leaderboardKey);
-            StartCoroutine(_accSaberInfoCoroutine);
+            _accSaberInfoCoroutine = StartManagedCoroutine(
+                LoadAccSaberInfo(_accSaberInfoRequestId, leaderboardKey),
+                ref _accSaberInfoCoroutineRunner
+            );
         }
 
         private IEnumerator LoadAccSaberInfo(int requestId, LeaderboardKey leaderboardKey) {
@@ -431,6 +435,7 @@ namespace BeatLeader.Components {
             }
 
             _accSaberInfoCoroutine = null;
+            _accSaberInfoCoroutineRunner = null;
 
             if (request.isNetworkError || request.isHttpError) {
                 Plugin.Log.Debug($"[AccSaberHeader] Failed to load difficulty info for {leaderboardKey.Hash}/{leaderboardKey.Diff}: {request.responseCode} {request.error}");
@@ -453,11 +458,7 @@ namespace BeatLeader.Components {
 
         private void CancelAccSaberInfoRequest() {
             _accSaberInfoRequestId++;
-
-            if (_accSaberInfoCoroutine != null) {
-                StopCoroutine(_accSaberInfoCoroutine);
-                _accSaberInfoCoroutine = null;
-            }
+            StopManagedCoroutine(ref _accSaberInfoCoroutine, ref _accSaberInfoCoroutineRunner);
 
             if (_activeAccSaberInfoRequest != null) {
                 _activeAccSaberInfoRequest.Abort();
@@ -590,6 +591,38 @@ namespace BeatLeader.Components {
                     mapTypePanel.SetActive(false);
                 }
             }
+        }
+
+        #endregion
+
+        #region Coroutine Runner
+
+        private static Coroutine StartManagedCoroutine(IEnumerator coroutine, ref MonoBehaviour? runner) {
+            runner = GetCoroutineRunner();
+            return runner.StartCoroutine(coroutine);
+        }
+
+        private static void StopManagedCoroutine(ref Coroutine? coroutine, ref MonoBehaviour? runner) {
+            if (coroutine != null && runner != null) {
+                runner.StopCoroutine(coroutine);
+            }
+
+            coroutine = null;
+            runner = null;
+        }
+
+        private static MonoBehaviour GetCoroutineRunner() {
+            if (_coroutineRunner != null) {
+                return _coroutineRunner;
+            }
+
+            var gameObject = new GameObject("BeatLeaderLeaderboardInfoRunner");
+            UnityEngine.Object.DontDestroyOnLoad(gameObject);
+            _coroutineRunner = gameObject.AddComponent<CoroutineRunner>();
+            return _coroutineRunner;
+        }
+
+        private sealed class CoroutineRunner : MonoBehaviour {
         }
 
         #endregion

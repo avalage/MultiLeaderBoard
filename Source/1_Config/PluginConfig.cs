@@ -106,7 +106,25 @@ namespace BeatLeader {
                 LeaderboardDisplaySettings = new LeaderboardDisplaySettings
                 {
                     ClanCaptureDisplay = settings.ClanCaptureDisplay,
-                    RankedStarsDisplayMode = value
+                    RankedStarsDisplayMode = value,
+                    AccSaberProfileStatsDisplay = settings.AccSaberProfileStatsDisplay
+                };
+            }
+        }
+
+        public static bool AccSaberProfileStatsDisplay
+        {
+            get => LeaderboardDisplaySettings.AccSaberProfileStatsDisplay;
+            set
+            {
+                var settings = LeaderboardDisplaySettings;
+                if (settings.AccSaberProfileStatsDisplay == value) return;
+
+                LeaderboardDisplaySettings = new LeaderboardDisplaySettings
+                {
+                    ClanCaptureDisplay = settings.ClanCaptureDisplay,
+                    RankedStarsDisplayMode = settings.RankedStarsDisplayMode,
+                    AccSaberProfileStatsDisplay = value
                 };
             }
         }

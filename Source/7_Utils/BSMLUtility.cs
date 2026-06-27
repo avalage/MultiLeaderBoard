@@ -8,7 +8,11 @@ using System.Threading.Tasks;
 namespace BeatLeader.Utils {
     public static class BSMLUtility {
         public static void AddSpriteToBSMLCache(string name, Sprite sprite) {
-            Utilities.SpriteCache.Add(name, sprite);
+            if (Utilities.SpriteCache.TryGetValue(name, out var cachedSprite) && cachedSprite != null) {
+                return;
+            }
+
+            Utilities.SpriteCache[name] = sprite;
         }
         public static Sprite LoadSprite(string location) {
             Sprite sprite = null;

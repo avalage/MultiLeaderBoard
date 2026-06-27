@@ -28,7 +28,7 @@ namespace BeatLeader.Models {
         public object? GetValue(ScoreRowCellType cellType) {
             return cellType switch {
                 ScoreRowCellType.Rank => rank,
-                ScoreRowCellType.Avatar => new AvatarScoreRowCell.Data(clan.avatar, null),
+                ScoreRowCellType.Avatar => new AvatarScoreRowCell.Data(clan.avatar, null, null, clan.name, rank),
                 ScoreRowCellType.Username => clan.name,
                 ScoreRowCellType.Accuracy => accuracy,
                 ScoreRowCellType.PerformancePoints => pp,

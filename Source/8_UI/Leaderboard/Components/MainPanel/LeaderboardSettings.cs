@@ -153,7 +153,8 @@ namespace BeatLeader.Components {
                 PluginConfig.LeaderboardDisplaySettings = new LeaderboardDisplaySettings
                 {
                     ClanCaptureDisplay = value,
-                    RankedStarsDisplayMode = settings.RankedStarsDisplayMode
+                    RankedStarsDisplayMode = settings.RankedStarsDisplayMode,
+                    AccSaberProfileStatsDisplay = settings.AccSaberProfileStatsDisplay
                 };
             }
         }
